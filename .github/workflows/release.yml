@@ -1,0 +1,47 @@
+name: Release builds
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure and build
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DCASSETTE_BUILD_TESTS=ON
+          cmake --build build --config Release -j3
+          ctest --test-dir build --output-on-failure
+      - name: Package zip
+        run: |
+          APP="build/CassetteAutoMaster_artefacts/Release/CassetteMaster.app"
+          ditto -c -k --sequesterRsrc --keepParent "$APP" CassetteAutoMaster-macOS.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CassetteAutoMaster-macOS
+          path: CassetteAutoMaster-macOS.zip
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure and build (MSVC)
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DCASSETTE_BUILD_TESTS=OFF
+          cmake --build build --config Release -j 3
+      - name: Package zip
+        shell: pwsh
+        run: |
+          $dir = "build/CassetteAutoMaster_artefacts/Release"
+          $exe = Get-ChildItem -Path $dir -Filter "*.exe" -Recurse | Select-Object -First 1
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item $exe.FullName dist/
+          Compress-Archive -Path dist/* -DestinationPath CassetteAutoMaster-Windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CassetteAutoMaster-Windows
+          path: CassetteAutoMaster-Windows.zip

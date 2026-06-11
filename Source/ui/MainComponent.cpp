@@ -1,0 +1,1262 @@
+#include "MainComponent.h"
+#include "UiTheme.h"
+#include <cmath>
+#include <memory>
+#include "../analysis/EssentiaAnalyzer.h"
+#include "../dsp/graph/AdaptiveMasteringProcessor.h"
+#include "../export/WavExporter.h"
+#include "../export/PreflightTones.h"
+#include "../project/SideRenderer.h"
+#include "../dsp/AudioConstants.h"
+
+namespace cassette
+{
+
+namespace
+{
+
+class ChangeTapeTypeDialog : public juce::Component
+{
+public:
+    std::function<void(int)> onResult;
+
+    ChangeTapeTypeDialog()
+    {
+        using namespace ui;
+
+        addAndMakeVisible(titleLabel);
+        Theme::applyLabel(titleLabel, Theme::sectionFont(), Theme::textPrimary(), juce::Justification::centred);
+        titleLabel.setText("Change tape type", juce::dontSendNotification);
+
+        addAndMakeVisible(messageLabel);
+        Theme::applyLabel(messageLabel, Theme::bodyFont(), Theme::textSecondary(), juce::Justification::centred);
+        messageLabel.setText("Changing the tape type discards the prepared result.\n"
+                             "You will need to run Prepare again.",
+                             juce::dontSendNotification);
+
+        addAndMakeVisible(changeButton);
+        addAndMakeVisible(keepButton);
+        Theme::styleNeutralButton(changeButton);
+        Theme::styleRecButton(keepButton);
+
+        changeButton.onClick = [this] { finish(1); };
+        keepButton.onClick = [this] { finish(0); };
+
+        setSize(380, 168);
+    }
+
+    void paint(juce::Graphics& g) override
+    {
+        g.fillAll(ui::Theme::card());
+        g.setColour(ui::Theme::border());
+        g.drawRect(getLocalBounds().toFloat().reduced(0.5f), 1.0f);
+    }
+
+    void resized() override
+    {
+        constexpr int padH = 24;
+        constexpr int padV = 20;
+        auto r = getLocalBounds().reduced(padH, padV);
+
+        titleLabel.setBounds(r.removeFromTop(20));
+        r.removeFromTop(12);
+        messageLabel.setBounds(r.removeFromTop(44));
+        r.removeFromTop(16);
+
+        auto row = r.removeFromTop(36);
+        const int gap = 10;
+        const int buttonW = (row.getWidth() - gap) / 2;
+        changeButton.setBounds(row.removeFromLeft(buttonW));
+        row.removeFromLeft(gap);
+        keepButton.setBounds(row);
+    }
+
+    bool keyPressed(const juce::KeyPress& key) override
+    {
+        if (key == juce::KeyPress::escapeKey)
+        {
+            finish(0);
+            return true;
+        }
+        if (key == juce::KeyPress::returnKey)
+        {
+            finish(0);
+            return true;
+        }
+        return juce::Component::keyPressed(key);
+    }
+
+private:
+    juce::Label titleLabel;
+    juce::Label messageLabel;
+    juce::TextButton changeButton { "Change type" };
+    juce::TextButton keepButton { "Keep current" };
+
+    void finish(int result)
+    {
+        if (onResult)
+            onResult(result);
+
+        if (auto* dw = findParentComponentOfClass<juce::DialogWindow>())
+            dw->exitModalState(result);
+    }
+};
+
+}
+
+MainComponent::MainComponent()
+{
+    using namespace ui;
+
+    for (auto* c : { static_cast<juce::Component*>(&sessionLabel),
+                     static_cast<juce::Component*>(&importButton),
+                     static_cast<juce::Component*>(&tapeSetupPanel),
+                     static_cast<juce::Component*>(&dropHero),
+                     static_cast<juce::Component*>(&wizardSteps),
+                     static_cast<juce::Component*>(&readySummary),
+                     static_cast<juce::Component*>(&compareWaveform),
+                     static_cast<juce::Component*>(&newButton),
+                     static_cast<juce::Component*>(&startButton),
+                     static_cast<juce::Component*>(&exportButton),
+                     static_cast<juce::Component*>(&playBeforeButton),
+                     static_cast<juce::Component*>(&playAfterButton),
+                     static_cast<juce::Component*>(&status) })
+        addAndMakeVisible(c);
+
+    addChildComponent(mixtapePanel);
+
+    tapeSetupPanel.setMainScreenMode(true);
+    tapeSetupPanel.setCompactToolbarMode(true);
+    tapeSetupPanel.setMixtapeMode(false);
+    tapeSetupPanel.onSetupChanged = [this] { refreshFolderFitLabel(); };
+    tapeSetupPanel.onChangeTapeTypeRequested = [this] { promptChangeTapeType(); };
+
+    Theme::applyLabel(sessionLabel, Theme::captionFont(), Theme::textMuted());
+    sessionLabel.setJustificationType(juce::Justification::topLeft);
+    Theme::applyLabel(readySummary, Theme::metricFont(), Theme::okGreen());
+    readySummary.setVisible(false);
+
+    Theme::styleRecButton(startButton);
+    Theme::styleExportButton(exportButton);
+    Theme::styleNeutralButton(newButton);
+    Theme::styleBlackButton(importButton);
+    Theme::styleNeutralButton(playBeforeButton);
+    Theme::styleNeutralButton(playAfterButton);
+
+    playBeforeButton.setButtonText("Before");
+    playAfterButton.setButtonText("After");
+    exportButton.setButtonText("Export WAV");
+    newButton.addListener(this);
+    importButton.addListener(this);
+    startButton.addListener(this);
+    exportButton.addListener(this);
+    playBeforeButton.addListener(this);
+    playAfterButton.addListener(this);
+    startButton.setEnabled(false);
+    newButton.setEnabled(false);
+    exportButton.setEnabled(false);
+    playBeforeButton.setEnabled(false);
+    playAfterButton.setEnabled(false);
+
+    Theme::applyLabel(status, Theme::bodyFont(), Theme::textSecondary());
+
+    dropHero.onChooseFolder = [this] { pickFolder(); };
+    compareWaveform.setShowEmptyDropZone(false);
+    compareWaveform.onPreviewSideClicked = [this](bool afterSide) {
+        if (afterSide)
+        {
+            if (playAfterButton.isEnabled())
+                playAfterButton.triggerClick();
+        }
+        else if (playBeforeButton.isEnabled())
+            playBeforeButton.triggerClick();
+    };
+
+    mixtapePanel.onFolderSelected = [this](const juce::File& folder) { scanMixFolder(folder); };
+
+    previewPlayer.setSource(&previewEngine);
+    previewEngine.setMonitoringEnabled(false);
+    previewDeviceManager.initialiseWithDefaultDevices(0, 2);
+    previewDeviceManager.addAudioCallback(&previewPlayer);
+
+    setStatus({}, Theme::textSecondary());
+    startTimerHz(12);
+    setWantsKeyboardFocus(true);
+    setSize(1180, 820);
+    updateWizardState();
+}
+
+MainComponent::~MainComponent()
+{
+    stopTimer();
+    stopPreview();
+    previewPlayer.setSource(nullptr);
+    previewDeviceManager.removeAudioCallback(&previewPlayer);
+    previewDeviceManager.closeAudioDevice();
+}
+
+TapeSetupPanel& MainComponent::tapeSetup() { return tapeSetupPanel; }
+const TapeSetupPanel& MainComponent::tapeSetup() const { return tapeSetupPanel; }
+
+void MainComponent::stopPreview()
+{
+    previewEngine.setPlaying(false);
+    previewEngine.setPlayheadSec(0.0);
+}
+
+void MainComponent::setStatus(const juce::String& text, juce::Colour colour)
+{
+    status.setText(text, juce::dontSendNotification);
+    status.setColour(juce::Label::textColourId, colour);
+    status.setVisible(text.isNotEmpty());
+}
+
+void MainComponent::syncTransportButtonStyles()
+{
+    using ui::Theme;
+
+    Theme::applyTransportButtonStyle(newButton, Theme::TransportButtonStyle::Neutral, newButton.isEnabled());
+    Theme::applyTransportButtonStyle(importButton, Theme::TransportButtonStyle::Black, importButton.isEnabled());
+    Theme::applyTransportButtonStyle(playBeforeButton, Theme::TransportButtonStyle::Neutral, playBeforeButton.isEnabled());
+    Theme::applyTransportButtonStyle(playAfterButton, Theme::TransportButtonStyle::Neutral, playAfterButton.isEnabled());
+    Theme::applyTransportButtonStyle(startButton, Theme::TransportButtonStyle::Rec, startButton.isEnabled());
+    Theme::applyTransportButtonStyle(exportButton, Theme::TransportButtonStyle::Export, exportButton.isEnabled());
+
+    newButton.repaint();
+    importButton.repaint();
+    playBeforeButton.repaint();
+    playAfterButton.repaint();
+    startButton.repaint();
+    exportButton.repaint();
+}
+
+void MainComponent::updateWizardState()
+{
+    wizardSteps.setStepDone(WizardPhase::AddMusic, hasSource);
+    wizardSteps.setStepDone(WizardPhase::Preparing, hasProcessed);
+    wizardSteps.setStepDone(WizardPhase::ReadyToExport, exportButton.isEnabled());
+
+    const bool busy = isProcessing.load();
+
+    if (!hasSource)
+        wizardSteps.setPhase(WizardPhase::AddMusic);
+    else if (!hasProcessed)
+        wizardSteps.setPhase(WizardPhase::Preparing);
+    else
+        wizardSteps.setPhase(WizardPhase::ReadyToExport);
+
+    dropHero.setVisible(!hasSource);
+    compareWaveform.setVisible(hasSource);
+    tapeSetupPanel.setMixtapeMode(mixtapeModeActive);
+
+    importButton.setEnabled(!busy);
+    dropHero.setInteractionEnabled(!busy);
+    tapeSetupPanel.setInteractionEnabled(!busy);
+    tapeSetupPanel.setTapeTypeLocked(hasProcessed && !busy);
+    mixtapePanel.setBusy(busy);
+
+    startButton.setVisible(!hasProcessed || busy);
+    startButton.setEnabled(hasSource && !busy && !hasProcessed);
+    startButton.setButtonText("Prepare");
+    newButton.setEnabled((hasSource || hasProcessed) && !busy);
+    exportButton.setEnabled(!busy && hasProcessed && loadedAudio.has_value());
+    playBeforeButton.setEnabled(!busy && hasProcessed && sourceAudio.has_value()
+                                && sourceAudio->buffer.getNumSamples() > 0);
+    playAfterButton.setEnabled(!busy && hasProcessed && loadedAudio.has_value());
+    syncTransportButtonStyles();
+}
+
+void MainComponent::updateReadySummary()
+{
+    if (!hasProcessed)
+    {
+        readySummary.setVisible(false);
+        return;
+    }
+
+    readySummary.setVisible(true);
+    if (mixtapeCassetteCount > 1)
+    {
+        readySummary.setText("Ready  |  " + juce::String(mixtapeCassetteCount) + " cassettes  |  Cassette 1 Side A: "
+                                 + juce::String(sideADurationSec / 60.0, 1) + " min",
+                             juce::dontSendNotification);
+    }
+    else if (hasSideB)
+    {
+        readySummary.setText("Ready for cassette  |  Side A: " + juce::String(sideADurationSec / 60.0, 1)
+                                 + " min  |  Side B: " + juce::String(sideBDurationSec / 60.0, 1) + " min",
+                             juce::dontSendNotification);
+    }
+    else
+    {
+        const double dur = loadedAudio.has_value()
+                               ? loadedAudio->buffer.getNumSamples() / loadedAudio->sampleRate
+                               : 0.0;
+        juce::String summary = "Ready for cassette";
+        summary += "  |  " + tapeSetup().getCassetteProfile().displayName;
+        summary += "  |  " + juce::String(dur / 60.0, 1) + " min";
+        readySummary.setText(summary, juce::dontSendNotification);
+    }
+}
+
+void MainComponent::updateWaveformInfo(const AudioFeatures& source, const AudioFeatures* processed)
+{
+    const auto dur = sourceAudio.has_value()
+                         ? sourceAudio->buffer.getNumSamples() / sourceAudio->sampleRate
+                         : (loadedAudio.has_value() ? loadedAudio->buffer.getNumSamples() / loadedAudio->sampleRate
+                                                    : 0.0);
+
+    WaveformCardInfo before;
+    before.title = "Before";
+    before.hasAudio = sourceAudio.has_value() || hasSource;
+    before.subtitle = juce::String(source.integratedLUFS, 1) + " LUFS  |  "
+                      + juce::String(dur / 60.0, 1) + " min";
+    compareWaveform.setBeforeInfo(before);
+
+    WaveformCardInfo after;
+    after.title = "After";
+    if (processed != nullptr)
+    {
+        after.hasAudio = true;
+        after.subtitle = juce::String(processed->integratedLUFS, 1) + " LUFS  |  "
+                         + juce::String(processed->truePeakDbfs, 1) + " dBTP";
+    }
+    compareWaveform.setAfterInfo(after);
+}
+
+MasteringOptions MainComponent::currentMasteringOptions() const
+{
+    return tapeSetup().getMasteringOptions();
+}
+
+TapeFormulation MainComponent::getSelectedProfile() const
+{
+    return tapeSetup().getTapeFormulation();
+}
+
+void MainComponent::paintProgressBar(juce::Graphics& g, juce::Rectangle<int> area) const
+{
+    if (area.isEmpty() || !isProcessing.load())
+        return;
+
+    auto r = area;
+    ui::Theme::drawPanel(g, r, true);
+
+    const float fill = static_cast<float>(juce::jlimit(0.0, 1.0, progress));
+    if (fill > 0.001f)
+    {
+        auto fillR = r.withWidth(static_cast<int>(r.getWidth() * fill));
+        g.setColour(ui::Theme::accent());
+        g.fillRect(fillR);
+    }
+
+    const int pct = static_cast<int>(std::lround(fill * 100.0));
+    g.setColour(fill > 0.55f ? juce::Colours::white : ui::Theme::textPrimary());
+    g.setFont(ui::Theme::metricFont());
+    g.drawText(juce::String(pct) + "%", r, juce::Justification::centred);
+}
+
+void MainComponent::paint(juce::Graphics& g)
+{
+    g.fillAll(ui::Theme::background());
+
+    g.setColour(ui::Theme::border());
+    g.drawVerticalLine(leftSidebarBounds.getRight(), 0.0f, static_cast<float>(getHeight()));
+    if (kRightSidebarW > 0)
+        g.drawVerticalLine(rightSidebarBounds.getX(), 0.0f, static_cast<float>(getHeight()));
+
+    paintProgressBar(g, progressBounds);
+
+    if (activeDropKind != DropPayloadKind::None)
+    {
+        g.setColour(ui::Theme::accent().withAlpha(0.08f));
+        g.fillRect(getLocalBounds().reduced(1));
+        g.setColour(ui::Theme::accent());
+        g.drawRect(getLocalBounds().reduced(1), 2);
+    }
+}
+
+void MainComponent::resized()
+{
+    auto bounds = getLocalBounds();
+
+    leftSidebarBounds = bounds.removeFromLeft(kLeftSidebarW);
+    if (kRightSidebarW > 0)
+        rightSidebarBounds = bounds.removeFromRight(kRightSidebarW);
+    else
+        rightSidebarBounds = {};
+    auto centre = bounds;
+
+    auto left = leftSidebarBounds.reduced(16, 18);
+    newButton.setBounds(left.removeFromTop(36));
+    left.removeFromTop(10);
+    importButton.setBounds(left.removeFromTop(36));
+    left.removeFromTop(18);
+    sessionLabel.setBounds(left.removeFromTop(72));
+
+    auto topBar = centre.removeFromTop(56).reduced(14, 12);
+    playBeforeButton.setBounds(topBar.removeFromLeft(76));
+    topBar.removeFromLeft(8);
+    playAfterButton.setBounds(topBar.removeFromLeft(76));
+    topBar.removeFromLeft(12);
+
+    if (!mixtapeModeActive)
+    {
+        tapeSetupPanel.setCompactToolbarMode(true);
+        tapeSetupPanel.setBounds(topBar.removeFromLeft(196));
+        topBar.removeFromLeft(12);
+    }
+
+    startButton.setBounds(topBar.removeFromLeft(112));
+    topBar.removeFromLeft(10);
+    exportButton.setBounds(topBar.removeFromRight(124));
+
+    if (kRightSidebarW > 0)
+    {
+        auto right = rightSidebarBounds.reduced(0, 10);
+        tapeSetupPanel.setBounds(right);
+    }
+
+    centre.removeFromTop(2);
+    wizardSteps.setBounds(centre.removeFromTop(52).reduced(10, 0));
+    centre.removeFromTop(6);
+
+    if (mixtapeModeActive)
+    {
+        tapeSetupPanel.setCompactToolbarMode(false);
+        tapeSetupPanel.setBounds(centre.removeFromTop(118).reduced(12, 0));
+        centre.removeFromTop(4);
+    }
+
+    if (!hasSource)
+    {
+        auto statusRow = centre.removeFromBottom(28).reduced(12, 4);
+        progressBounds = statusRow.removeFromRight(168);
+        statusRow.removeFromRight(8);
+        status.setBounds(statusRow);
+        dropHero.setBounds(centre.reduced(12, 8));
+        return;
+    }
+
+    if (readySummary.isVisible())
+    {
+        readySummary.setBounds(centre.removeFromTop(22).reduced(14, 0));
+        centre.removeFromTop(6);
+    }
+
+    auto statusRow = centre.removeFromBottom(28).reduced(12, 4);
+    progressBounds = statusRow.removeFromRight(168);
+    statusRow.removeFromRight(8);
+    status.setBounds(statusRow);
+
+    compareWaveform.setBounds(centre.reduced(8, 4));
+}
+
+bool MainComponent::keyPressed(const juce::KeyPress& key)
+{
+    const auto mods = key.getModifiers();
+    if (mods.isCommandDown() && key.getKeyCode() == 'N')
+    {
+        if (newButton.isEnabled())
+            newButton.triggerClick();
+        return true;
+    }
+    if (mods.isCommandDown() && key.getKeyCode() == 'O')
+    {
+        pickFolder();
+        return true;
+    }
+    if (mods.isCommandDown() && key.getKeyCode() == juce::KeyPress::returnKey)
+    {
+        if (startButton.isEnabled())
+            startButton.triggerClick();
+        return true;
+    }
+    if (mods.isCommandDown() && key.getKeyCode() == 'E')
+    {
+        if (exportButton.isEnabled())
+            exportButton.triggerClick();
+        return true;
+    }
+
+    if (auto* window = dynamic_cast<juce::DocumentWindow*>(getTopLevelComponent()))
+    {
+#if JUCE_MAC
+        if (mods.isCommandDown() && mods.isCtrlDown() && key.getTextCharacter() == 'f')
+        {
+            window->setFullScreen(!window->isFullScreen());
+            return true;
+        }
+#endif
+        if (key.getKeyCode() == juce::KeyPress::F11Key)
+        {
+            window->setFullScreen(!window->isFullScreen());
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void MainComponent::timerCallback()
+{
+    if (isProcessing.load())
+        repaint(progressBounds);
+}
+
+void MainComponent::setProgress(double value)
+{
+    progress = juce::jlimit(0.0, 1.0, value);
+    repaint(progressBounds);
+}
+
+void MainComponent::setUiProcessing(bool processing)
+{
+    isProcessing.store(processing);
+    if (processing)
+    {
+        progress = 0.0;
+        stopPreview();
+    }
+    if (!processing)
+        refreshFolderFitLabel();
+    updateWizardState();
+    resized();
+    repaint(progressBounds);
+}
+
+namespace
+{
+constexpr double kPreviewMaxSec = 45.0;
+
+juce::AudioBuffer<float> previewSnippet(const juce::AudioBuffer<float>& source, double sampleRate)
+{
+    const int maxSamples = static_cast<int>(kPreviewMaxSec * sampleRate);
+    if (source.getNumSamples() <= maxSamples)
+        return source;
+
+    juce::AudioBuffer<float> snippet;
+    snippet.makeCopyOf(source);
+    snippet.setSize(snippet.getNumChannels(), maxSamples, true, true, true);
+    return snippet;
+}
+}
+
+void MainComponent::syncPreviewBuffer(const std::optional<LoadedAudio>& audio)
+{
+    if (!audio.has_value())
+        return;
+    auto copy = previewSnippet(audio->buffer, audio->sampleRate);
+    previewEngine.setBuffer(std::move(copy), audio->sampleRate);
+}
+
+void MainComponent::resetSession()
+{
+    if (isProcessing.load())
+        return;
+
+    stopPreview();
+
+    hasSource = false;
+    hasProcessed = false;
+    mixtapeModeActive = false;
+    hasSideB = false;
+    mixtapeCassetteCount = 1;
+    folderScan.reset();
+    loadedAudio.reset();
+    sourceAudio.reset();
+    mixtapeReferenceAudio.reset();
+    sideAAudio.reset();
+    sideBAudio.reset();
+    lastQuality.reset();
+    lastProcessedFeatures.reset();
+    loadedFile = juce::File();
+    sideAPath = juce::File();
+    sideBPath = juce::File();
+    sideADurationSec = 0.0;
+    sideBDurationSec = 0.0;
+
+    preparedTapeLabel = {};
+    compareWaveform.clearAll();
+    readySummary.setVisible(false);
+    sessionLabel.setText("No project loaded", juce::dontSendNotification);
+    exportButton.setEnabled(false);
+    playBeforeButton.setEnabled(false);
+    playAfterButton.setEnabled(false);
+
+    tapeSetupPanel.setMixtapeMode(false);
+    mixtapePanel.setFitReport("", true);
+    mixtapePanel.setBusy(false);
+
+    setStatus({}, ui::Theme::textSecondary());
+    resized();
+    updateWizardState();
+}
+
+void MainComponent::invalidatePreparedOutput()
+{
+    stopPreview();
+    hasProcessed = false;
+    preparedTapeLabel = {};
+    lastQuality.reset();
+    lastProcessedFeatures.reset();
+
+    if (sourceAudio.has_value())
+    {
+        loadedAudio = *sourceAudio;
+        compareWaveform.setBeforeBuffer(sourceAudio->buffer, sourceAudio->sampleRate);
+    }
+    compareWaveform.clearAfter();
+    readySummary.setVisible(false);
+
+    setStatus("Choose tape type, then Prepare", ui::Theme::textSecondary());
+    updateWizardState();
+    resized();
+}
+
+void MainComponent::promptChangeTapeType()
+{
+    if (!hasProcessed || isProcessing.load())
+        return;
+
+    auto* content = new ChangeTapeTypeDialog();
+    content->onResult = [this](int result) {
+        if (result == 1)
+            invalidatePreparedOutput();
+    };
+
+    juce::DialogWindow::LaunchOptions opts;
+    opts.content.setOwned(content);
+    opts.dialogTitle = {};
+    opts.dialogBackgroundColour = ui::Theme::card();
+    opts.useNativeTitleBar = false;
+    opts.resizable = false;
+    opts.escapeKeyTriggersCloseButton = false;
+    opts.componentToCentreAround = this;
+    opts.launchAsync();
+}
+
+void MainComponent::pickFolder()
+{
+    auto chooser = std::make_shared<juce::FileChooser>(
+        "Import audio",
+        juce::File::getSpecialLocation(juce::File::userMusicDirectory),
+        AudioFileLoader::importFileWildcard());
+
+    chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles
+                             | juce::FileBrowserComponent::canSelectDirectories,
+                         [this, chooser](const juce::FileChooser& fc) {
+                             const auto picked = fc.getResult();
+                             if (picked == juce::File())
+                                 return;
+
+                             if (picked.isDirectory())
+                                 scanMixFolder(picked);
+                             else if (AudioFileLoader::isSupportedAudioFile(picked))
+                                 loadAudioFile(picked);
+                             else
+                                 setStatus("Unsupported format (use WAV, FLAC, AIFF, OGG)", ui::Theme::warnAmber());
+                         });
+}
+
+void MainComponent::refreshFolderFitLabel()
+{
+    if (!folderScan.has_value() || !folderScan->success)
+        return;
+
+    const auto report = FolderMixBuilder::analyzeFit(*folderScan, tapeSetup().getTapeLengthSpec());
+    mixtapePanel.setFitReport(report.summary(), report.fits);
+    mixtapePanel.setBuildEnabled(report.fits && !isProcessing.load());
+}
+
+void MainComponent::scanMixFolder(const juce::File& folder)
+{
+    folderScan.reset();
+    hasProcessed = false;
+    hasSource = false;
+    mixtapePanel.setBusy(true);
+    mixtapeModeActive = true;
+    tapeSetupPanel.setMixtapeMode(true);
+    setStatus("Scanning " + folder.getFileName() + "...", ui::Theme::warnAmber());
+
+    worker.enqueue([this, folder]() {
+        const auto scan = FolderMixBuilder::scanFolder(folder);
+        juce::MessageManager::callAsync([this, scan, folder]() {
+            mixtapePanel.setBusy(false);
+            if (!scan.success)
+            {
+                mixtapePanel.setFitReport(scan.error, false);
+                setStatus(scan.error, ui::Theme::failRed());
+                return;
+            }
+            folderScan = scan;
+            mixtapePanel.setFolderScan(scan, folder);
+            hasSource = true;
+            sessionLabel.setText(folder.getFileName() + "\n" + juce::String(scan.tracks.size()) + " tracks",
+                                 juce::dontSendNotification);
+            refreshFolderFitLabel();
+            resized();
+            setStatus("Added " + juce::String(scan.tracks.size()) + " tracks ("
+                          + FolderMixBuilder::formatDuration(scan.totalDurationSec) + ")",
+                      ui::Theme::textPrimary());
+            updateWizardState();
+        });
+    });
+}
+
+void MainComponent::loadAudioFile(const juce::File& file)
+{
+    loadedFile = file;
+    loadedAudio.reset();
+    sourceAudio.reset();
+    hasProcessed = false;
+    hasSource = false;
+    preparedTapeLabel = {};
+    lastQuality.reset();
+    lastProcessedFeatures.reset();
+    hasSideB = false;
+    mixtapeModeActive = false;
+    mixtapeReferenceAudio.reset();
+    tapeSetupPanel.setMixtapeMode(false);
+    compareWaveform.clearAfter();
+    exportButton.setEnabled(false);
+    setStatus("Loading " + file.getFileName() + "...", ui::Theme::warnAmber());
+
+    worker.enqueue([this, file]() {
+        const auto result = AudioFileLoader::loadToBufferWithDiagnostics(file);
+        juce::MessageManager::callAsync([this, file, result]() {
+            if (!result.audio.hasValue())
+            {
+                setStatus("Load failed: " + result.error, ui::Theme::failRed());
+                return;
+            }
+
+            loadedAudio = *result.audio;
+            sourceAudio = *result.audio;
+            hasSource = true;
+            sessionLabel.setText(file.getFileName(), juce::dontSendNotification);
+            compareWaveform.setBeforeBuffer(sourceAudio->buffer, sourceAudio->sampleRate);
+            compareWaveform.clearAfter();
+
+            const auto features = EssentiaAnalyzer::extractFeatures(loadedAudio->buffer, loadedAudio->sampleRate);
+            updateWaveformInfo(features, nullptr);
+
+            setStatus("Added " + file.getFileName(), ui::Theme::okGreen());
+            resized();
+            updateWizardState();
+        });
+    });
+}
+
+void MainComponent::startProcessing()
+{
+    if (!loadedAudio.has_value())
+    {
+        setStatus("Add music first", ui::Theme::warnAmber());
+        return;
+    }
+    if (isProcessing.load())
+        return;
+
+    const auto profile = tapeSetup().getCassetteProfile();
+    const auto options = currentMasteringOptions();
+    const auto fileName = loadedFile.getFileName();
+
+    if (!sourceAudio.has_value())
+        sourceAudio = *loadedAudio;
+
+    auto audioCopy = *loadedAudio;
+    setUiProcessing(true);
+    setStatus("Preparing for cassette...", ui::Theme::warnAmber());
+    wizardSteps.setPhase(WizardPhase::Preparing);
+
+    worker.enqueue([this, audioCopy, profile, options, fileName]() mutable {
+        const auto t0 = juce::Time::getMillisecondCounterHiRes();
+        juce::MessageManager::callAsync([this]() { setProgress(0.05); });
+
+        juce::AudioBuffer<float> reference;
+        reference.makeCopyOf(audioCopy.buffer);
+        const auto features = EssentiaAnalyzer::extractFeatures(reference, audioCopy.sampleRate);
+        juce::MessageManager::callAsync([this]() { setProgress(0.18); });
+
+        const auto mastered = AdaptiveMasteringProcessor::process(
+            audioCopy.buffer, profile, options, audioCopy.sampleRate);
+        juce::MessageManager::callAsync([this]() { setProgress(0.82); });
+
+        juce::MessageManager::callAsync([this]() { setProgress(0.96); });
+        const auto ms = juce::Time::getMillisecondCounterHiRes() - t0;
+
+        juce::MessageManager::callAsync([this, audioCopy, mastered, fileName, ms, features, profile]() mutable {
+            setProgress(1.0);
+            loadedAudio = std::move(audioCopy);
+            lastQuality = mastered.quality;
+            hasProcessed = true;
+            preparedTapeLabel = profile.displayName;
+
+            if (sourceAudio.has_value())
+                compareWaveform.setBeforeBuffer(sourceAudio->buffer, sourceAudio->sampleRate);
+            compareWaveform.setAfterBuffer(loadedAudio->buffer, loadedAudio->sampleRate);
+
+            lastProcessedFeatures = mastered.featuresAfter;
+            updateWaveformInfo(features, &mastered.featuresAfter);
+
+            juce::String msg = "Ready: " + juce::String(mastered.featuresAfter.integratedLUFS, 1) + " LUFS ("
+                                 + juce::String(ms / 1000.0, 1) + " s)";
+            finishProcessing(true, msg);
+            exportButton.setEnabled(true);
+            updateReadySummary();
+            resized();
+            updateWizardState();
+        });
+    });
+}
+
+void MainComponent::finishProcessing(bool success, const juce::String& message)
+{
+    setUiProcessing(false);
+    setStatus(message, success ? ui::Theme::okGreen() : ui::Theme::failRed());
+}
+
+void MainComponent::startFolderMixBuild()
+{
+    if (!folderScan.has_value() || !folderScan->success)
+    {
+        setStatus("Pick a folder with tracks first", ui::Theme::warnAmber());
+        return;
+    }
+
+    const auto tape = tapeSetup().getTapeLengthSpec();
+    const auto fit = FolderMixBuilder::analyzeFit(*folderScan, tape);
+    if (!fit.fits)
+    {
+        setStatus(fit.summary(), ui::Theme::warnAmber());
+        return;
+    }
+    if (isProcessing.load())
+        return;
+
+    const auto profile = tapeSetup().getCassetteProfile();
+    auto options = currentMasteringOptions();
+    options.skipQualityCompare = true;
+
+    const auto scanCopy = *folderScan;
+    const auto projectName = mixtapePanel.currentFolder().getFileName();
+    const juce::File outFolder = mixtapePanel.currentFolder();
+    const auto allowedSec = tape.minutesPerSide * 60.0;
+
+    setUiProcessing(true);
+    wizardSteps.setPhase(WizardPhase::Preparing);
+    setStatus(fit.cassetteCount > 1 ? "Preparing " + juce::String(fit.cassetteCount) + " cassettes..."
+                                    : "Preparing Side A and Side B...",
+              ui::Theme::warnAmber());
+
+    worker.enqueue([this, scanCopy, profile, options, projectName, outFolder, allowedSec, fit]() {
+        try
+        {
+            const double sampleRate = kProjectSampleRate;
+            const int totalTracks = static_cast<int>(scanCopy.tracks.size());
+
+            const auto trackProgress = [this, totalTracks](int tracksDone, int, const juce::String& title) {
+                const auto msg = "Track " + juce::String(tracksDone) + "/" + juce::String(totalTracks) + ": " + title;
+                const double pct = juce::jlimit(0.0, 0.98, static_cast<double>(tracksDone) / static_cast<double>(totalTracks));
+                juce::MessageManager::callAsync([this, msg, pct]() {
+                    setProgress(pct);
+                    status.setText(msg, juce::dontSendNotification);
+                    status.setColour(juce::Label::textColourId, ui::Theme::warnAmber());
+                });
+            };
+
+            juce::String workerError;
+            std::shared_ptr<RenderResult> previewA;
+            std::shared_ptr<RenderResult> previewB;
+            juce::File previewSideAFile;
+            juce::File previewSideBFile;
+            const CassettePlan* previewPlan = fit.cassettes.empty() ? nullptr : &fit.cassettes.front();
+
+            for (const auto& cassettePlan : fit.cassettes)
+            {
+                auto project = FolderMixBuilder::buildCassetteProject(scanCopy,
+                                                                    cassettePlan,
+                                                                    projectName,
+                                                                    profile,
+                                                                    options,
+                                                                    allowedSec);
+
+                const juce::String cassetteLabel = fit.cassetteCount > 1
+                                                       ? projectName + " Cassette "
+                                                             + juce::String(cassettePlan.cassetteNumber)
+                                                       : projectName;
+
+                const auto sideAProgress = [&, start = cassettePlan.sideAStartTrack](int index, int, const juce::String& title) {
+                    trackProgress(start + index, totalTracks, title);
+                };
+
+                const bool captureReference = previewA == nullptr;
+                auto renderedA = SideRenderer::renderSide(project, false, sampleRate, false, sideAProgress, captureReference);
+                if (!renderedA.success)
+                {
+                    workerError = renderedA.error;
+                    break;
+                }
+
+                juce::File sideAFile = outFolder.getChildFile(cassetteLabel + " Side A.wav");
+                if (!WavExporter::writeWav32Float(sideAFile, renderedA.buffer, renderedA.sampleRate))
+                {
+                    workerError = "Failed to write " + sideAFile.getFileName();
+                    break;
+                }
+
+                if (previewA == nullptr)
+                {
+                    previewA = std::make_shared<RenderResult>(std::move(renderedA));
+                    previewSideAFile = sideAFile;
+                }
+
+                if (cassettePlan.hasSideB)
+                {
+                    const auto sideBProgress = [&, start = cassettePlan.sideBStartTrack](int index, int, const juce::String& title) {
+                        trackProgress(start + index, totalTracks, title);
+                    };
+
+                    auto renderedB = SideRenderer::renderSide(project, true, sampleRate, false, sideBProgress);
+                    if (!renderedB.success)
+                    {
+                        workerError = renderedB.error;
+                        break;
+                    }
+
+                    juce::File sideBFile = outFolder.getChildFile(cassetteLabel + " Side B.wav");
+                    if (!WavExporter::writeWav32Float(sideBFile, renderedB.buffer, renderedB.sampleRate))
+                    {
+                        workerError = "Failed to write " + sideBFile.getFileName();
+                        break;
+                    }
+
+                    if (previewB == nullptr && fit.cassetteCount == 1)
+                    {
+                        previewB = std::make_shared<RenderResult>(std::move(renderedB));
+                        previewSideBFile = sideBFile;
+                    }
+                }
+            }
+
+            juce::MessageManager::callAsync([this]() { setProgress(0.99); });
+
+            juce::MessageManager::callAsync([this,
+                                             previewA,
+                                             previewB,
+                                             scanCopy,
+                                             projectName,
+                                             fit,
+                                             previewPlan,
+                                             previewSideAFile,
+                                             previewSideBFile,
+                                             workerError,
+                                             profile]() mutable {
+                if (workerError.isNotEmpty())
+                {
+                    finishProcessing(false, workerError);
+                    return;
+                }
+
+                if (previewA == nullptr)
+                {
+                    finishProcessing(false, "No cassette output produced");
+                    return;
+                }
+
+                mixtapeCassetteCount = fit.cassetteCount;
+
+                LoadedAudio sideA;
+                sideA.buffer = std::move(previewA->buffer);
+                sideA.sampleRate = previewA->sampleRate;
+                sideAAudio = std::move(sideA);
+                sideAPath = previewSideAFile;
+                sideADurationSec = sideAAudio->buffer.getNumSamples() / sideAAudio->sampleRate;
+                hasSideB = previewB != nullptr;
+
+                if (previewA->referenceBuffer.getNumSamples() > 0)
+                {
+                    LoadedAudio reference;
+                    reference.buffer = std::move(previewA->referenceBuffer);
+                    reference.sampleRate = previewA->sampleRate;
+                    mixtapeReferenceAudio = std::move(reference);
+                }
+
+                if (hasSideB && previewB != nullptr)
+                {
+                    LoadedAudio sideB;
+                    sideB.buffer = std::move(previewB->buffer);
+                    sideB.sampleRate = previewB->sampleRate;
+                    sideBAudio = std::move(sideB);
+                    sideBPath = previewSideBFile;
+                    sideBDurationSec = sideBAudio->buffer.getNumSamples() / sideBAudio->sampleRate;
+                }
+
+                showMixtapeSide(false);
+                hasProcessed = true;
+                preparedTapeLabel = profile.displayName;
+                exportButton.setEnabled(true);
+
+                updateReadySummary();
+                const juce::String doneMsg = fit.cassetteCount > 1
+                                                 ? juce::String(fit.cassetteCount) + " cassettes saved next to your music"
+                                                 : "Side A/B WAV files saved next to your music";
+                setProgress(1.0);
+                finishProcessing(true, doneMsg);
+                resized();
+                updateWizardState();
+            });
+        }
+        catch (const std::exception& e)
+        {
+            juce::MessageManager::callAsync([this, msg = juce::String(e.what())]() {
+                finishProcessing(false, "Processing failed: " + msg);
+            });
+        }
+        catch (...)
+        {
+            juce::MessageManager::callAsync([this]() {
+                finishProcessing(false, "Processing failed unexpectedly");
+            });
+        }
+    });
+}
+
+void MainComponent::showMixtapeSide(bool sideB)
+{
+    if (!sideAAudio.has_value())
+        return;
+
+    const auto& audio = sideB && sideBAudio.has_value() ? *sideBAudio : *sideAAudio;
+    loadedAudio = audio;
+    loadedFile = sideB ? sideBPath : sideAPath;
+
+    if (!sideB && mixtapeReferenceAudio.has_value())
+    {
+        sourceAudio = *mixtapeReferenceAudio;
+        compareWaveform.setBeforeBuffer(sourceAudio->buffer, sourceAudio->sampleRate);
+    }
+    else
+    {
+        juce::AudioBuffer<float> empty;
+        compareWaveform.setBeforeBuffer(empty, audio.sampleRate);
+    }
+
+    compareWaveform.setAfterBuffer(audio.buffer, audio.sampleRate);
+
+    const double dur = audio.buffer.getNumSamples() / audio.sampleRate;
+
+    if (sourceAudio.has_value() && sourceAudio->buffer.getNumSamples() > 0)
+    {
+        const auto srcExcerpt = EssentiaAnalyzer::excerpt(sourceAudio->buffer, sourceAudio->sampleRate);
+        const auto procExcerpt = EssentiaAnalyzer::excerpt(audio.buffer, audio.sampleRate);
+        const auto srcFeatures = EssentiaAnalyzer::extractFeaturesForMastering(srcExcerpt, sourceAudio->sampleRate);
+        const auto procFeatures = EssentiaAnalyzer::extractFeaturesForMastering(procExcerpt, audio.sampleRate);
+        lastProcessedFeatures = procFeatures;
+        updateWaveformInfo(srcFeatures, &procFeatures);
+
+        WaveformCardInfo before;
+        before.title = "Before";
+        before.hasAudio = true;
+        before.subtitle = juce::String(srcFeatures.integratedLUFS, 1) + " LUFS  |  "
+                          + juce::String(dur / 60.0, 1) + " min";
+        compareWaveform.setBeforeInfo(before);
+
+        WaveformCardInfo after;
+        after.title = "After";
+        after.hasAudio = true;
+        after.subtitle = juce::String(procFeatures.integratedLUFS, 1) + " LUFS  |  "
+                         + juce::String(procFeatures.truePeakDbfs, 1) + " dBTP";
+        compareWaveform.setAfterInfo(after);
+    }
+    else
+    {
+        const auto procExcerpt = EssentiaAnalyzer::excerpt(audio.buffer, audio.sampleRate);
+        const auto features = EssentiaAnalyzer::extractFeaturesForMastering(procExcerpt, audio.sampleRate);
+        lastProcessedFeatures = features;
+        updateWaveformInfo(features, &features);
+    }
+}
+
+DropPayloadKind MainComponent::dropPayloadKind(const juce::StringArray& files) const
+{
+    for (const auto& path : files)
+    {
+        if (AudioFileLoader::normaliseDroppedPath(path).isDirectory())
+            return DropPayloadKind::Folder;
+    }
+    if (AudioFileLoader::isSupportedAudioFileDrop(files))
+        return DropPayloadKind::AudioFile;
+    return DropPayloadKind::None;
+}
+
+void MainComponent::updateDropHighlight(const juce::StringArray& files, bool active)
+{
+    activeDropKind = active ? dropPayloadKind(files) : DropPayloadKind::None;
+    dropHero.setDragHighlight(active, activeDropKind);
+    compareWaveform.setDragHighlight(activeDropKind != DropPayloadKind::None, activeDropKind);
+    repaint();
+}
+
+bool MainComponent::isInterestedInDrop(const juce::StringArray& files) const
+{
+    if (isProcessing.load())
+        return false;
+
+    for (const auto& f : files)
+    {
+        if (AudioFileLoader::normaliseDroppedPath(f).isDirectory())
+            return true;
+    }
+    return AudioFileLoader::isSupportedAudioFileDrop(files);
+}
+
+void MainComponent::exportWav()
+{
+    if (!loadedAudio.has_value())
+    {
+        setStatus("Prepare for cassette first", ui::Theme::warnAmber());
+        return;
+    }
+
+    auto chooser = std::make_shared<juce::FileChooser>(
+        "Export WAV",
+        loadedFile.getParentDirectory().exists() ? loadedFile.getParentDirectory()
+                                                 : juce::File::getSpecialLocation(juce::File::userDesktopDirectory),
+        "*.wav");
+
+    chooser->launchAsync(juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::warnAboutOverwriting,
+                         [this, chooser](const juce::FileChooser& fc) {
+                             const auto out = fc.getResult();
+                             if (out == juce::File())
+                                 return;
+
+                             juce::AudioBuffer<float> exportBuffer;
+                             exportBuffer.makeCopyOf(loadedAudio->buffer);
+
+                             const bool preflight = tapeSetup().isPreflightEnabled();
+                             if (preflight)
+                             {
+                                 PreflightOptions preflightOptions;
+                                 preflightOptions.title = loadedFile.getFileNameWithoutExtension();
+                                 preflightOptions.sideLabel = out.getFileName().containsIgnoreCase("Side B") ? "Side B"
+                                                                                                           : "Side A";
+                                 preflightOptions.kenwoodKX1100Calibration =
+                                     tapeSetup().getRecordingDeck() == RecordingDeck::KenwoodKX1100G;
+                                 PreflightTones::prependToBuffer(exportBuffer, loadedAudio->sampleRate, preflightOptions);
+                             }
+
+                             if (WavExporter::writeWav32Float(out, exportBuffer, loadedAudio->sampleRate))
+                             {
+                                 wizardSteps.setStepDone(WizardPhase::ReadyToExport, true);
+                                 setStatus("Exported: " + out.getFileName(), ui::Theme::okGreen());
+                                 updateWizardState();
+                             }
+                             else
+                                 setStatus("Export failed", ui::Theme::failRed());
+                         });
+}
+
+bool MainComponent::isInterestedInAudioFileDrag(const juce::StringArray& files)
+{
+    return isInterestedInDrop(files);
+}
+
+void MainComponent::handleAudioFilesDropped(const juce::StringArray& files, int, int)
+{
+    if (isProcessing.load())
+        return;
+
+    for (const auto& f : files)
+    {
+        if (AudioFileLoader::normaliseDroppedPath(f).isDirectory())
+        {
+            scanMixFolder(AudioFileLoader::normaliseDroppedPath(f));
+            return;
+        }
+    }
+
+    const auto file = AudioFileLoader::pickFirstAudioFile(files);
+    if (file.existsAsFile())
+        loadAudioFile(file);
+    else
+        setStatus("No supported audio in drop", ui::Theme::warnAmber());
+}
+
+bool MainComponent::isInterestedInFileDrag(const juce::StringArray& files)
+{
+    return isInterestedInDrop(files);
+}
+
+void MainComponent::fileDragEnter(const juce::StringArray& files, int, int)
+{
+    if (!isInterestedInDrop(files))
+        return;
+    ++windowDragDepth;
+    updateDropHighlight(files, true);
+}
+
+void MainComponent::fileDragExit(const juce::StringArray&)
+{
+    if (windowDragDepth <= 0)
+        return;
+    --windowDragDepth;
+    if (windowDragDepth == 0)
+        updateDropHighlight({}, false);
+}
+
+void MainComponent::filesDropped(const juce::StringArray& files, int x, int y)
+{
+    windowDragDepth = 0;
+    updateDropHighlight({}, false);
+    handleAudioFilesDropped(files, x, y);
+}
+
+void MainComponent::buttonClicked(juce::Button* button)
+{
+    if (button == &newButton)
+    {
+        resetSession();
+        return;
+    }
+    if (button == &importButton)
+    {
+        pickFolder();
+        return;
+    }
+    if (button == &startButton)
+    {
+        if (mixtapeModeActive && folderScan.has_value())
+            startFolderMixBuild();
+        else
+            startProcessing();
+        return;
+    }
+    if (button == &exportButton)
+    {
+        exportWav();
+        return;
+    }
+    if (button == &playBeforeButton)
+    {
+        if (!sourceAudio.has_value())
+            return;
+        stopPreview();
+        syncPreviewBuffer(sourceAudio);
+        previewEngine.setPlayheadSec(0.0);
+        previewEngine.setPlaying(true);
+        return;
+    }
+    if (button == &playAfterButton)
+    {
+        if (!loadedAudio.has_value())
+            return;
+        stopPreview();
+        syncPreviewBuffer(loadedAudio);
+        previewEngine.setPlayheadSec(0.0);
+        previewEngine.setPlaying(true);
+    }
+}
+
+}
