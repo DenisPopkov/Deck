@@ -15,6 +15,10 @@ TapeSetupPanel::TapeSetupPanel()
     Theme::applyLabel(tapeLengthLabel, Theme::captionFont(), Theme::textSecondary());
     tapeLengthLabel.setVisible(false);
 
+    addAndMakeVisible(tapeFitLabel);
+    Theme::applyLabel(tapeFitLabel, Theme::captionFont(), Theme::textSecondary());
+    tapeFitLabel.setVisible(false);
+
     addAndMakeVisible(presetBox);
     presetBox.addItem("Preset: Custom", 1);
     presetBox.addItem("Type IV deck", 2);
@@ -51,6 +55,20 @@ TapeSetupPanel::TapeSetupPanel()
     changeTypeButton.addListener(this);
     changeTypeButton.setVisible(false);
 
+    for (auto* b : { &lengthBtnCustom, &lengthBtnC60, &lengthBtnC90, &lengthBtnC120 })
+    {
+        addAndMakeVisible(*b);
+        b->setRadioGroupId(9200);
+        b->setClickingTogglesState(true);
+        b->addListener(this);
+    }
+    lengthBtnCustom.setTooltip("Custom length per side");
+    lengthBtnC60.setTooltip("C60 — 30 min per side");
+    lengthBtnC90.setTooltip("C90 — 45 min per side");
+    lengthBtnC120.setTooltip("C120 — 60 min per side");
+    lengthBtnC90.setToggleState(true, juce::dontSendNotification);
+    refreshLengthSegmentStyles();
+
     addAndMakeVisible(tapeLengthBox);
     tapeLengthBox.addItem("C60 (30 min/side)", 1);
     tapeLengthBox.addItem("C90 (45 min/side)", 2);
@@ -58,8 +76,9 @@ TapeSetupPanel::TapeSetupPanel()
     tapeLengthBox.addItem("Custom minutes", 4);
     tapeLengthBox.setSelectedId(2, juce::dontSendNotification);
     Theme::styleCombo(tapeLengthBox);
+    tapeLengthBox.setVisible(false);
     tapeLengthBox.onChange = [this] {
-        customMinutesSlider.setEnabled(tapeLengthBox.getSelectedId() == 4);
+        updateLengthControlPresentation();
         notifyChanged();
     };
 
@@ -67,8 +86,14 @@ TapeSetupPanel::TapeSetupPanel()
     customMinutesSlider.setRange(5.0, 120.0, 1.0);
     customMinutesSlider.setValue(45.0, juce::dontSendNotification);
     customMinutesSlider.setSliderStyle(juce::Slider::LinearHorizontal);
-    customMinutesSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 44, 22);
+    customMinutesSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 84, 24);
+    customMinutesSlider.textFromValueFunction = [](double value) {
+        return juce::String(juce::roundToInt(value)) + " min";
+    };
+    Theme::styleAccentSlider(customMinutesSlider);
+    customMinutesSlider.setVisible(false);
     customMinutesSlider.setEnabled(false);
+    customMinutesSlider.onValueChange = [this] { notifyChanged(); };
     customMinutesSlider.addListener(this);
 
     addAndMakeVisible(preflightToggle);
@@ -122,6 +147,17 @@ MasteringOptions TapeSetupPanel::getMasteringOptions() const
 
 TapeLengthSpec TapeSetupPanel::getTapeLengthSpec() const
 {
+    if (mainScreenMode)
+    {
+        if (lengthBtnCustom.getToggleState())
+            return tapeLengthSpecForPreset(TapeLengthPreset::Custom, customMinutesSlider.getValue());
+        if (lengthBtnC60.getToggleState())
+            return tapeLengthSpecForPreset(TapeLengthPreset::C60, 30.0);
+        if (lengthBtnC120.getToggleState())
+            return tapeLengthSpecForPreset(TapeLengthPreset::C120, 60.0);
+        return tapeLengthSpecForPreset(TapeLengthPreset::C90, 45.0);
+    }
+
     TapeLengthPreset preset = TapeLengthPreset::C90;
     switch (tapeLengthBox.getSelectedId())
     {
@@ -132,6 +168,12 @@ TapeLengthSpec TapeSetupPanel::getTapeLengthSpec() const
         default: preset = TapeLengthPreset::C90; break;
     }
     return tapeLengthSpecForPreset(preset, customMinutesSlider.getValue());
+}
+
+bool TapeSetupPanel::isCustomTapeLengthSelected() const
+{
+    return mainScreenMode ? lengthBtnCustom.getToggleState()
+                          : tapeLengthBox.getSelectedId() == 4;
 }
 
 void TapeSetupPanel::setMainScreenMode(bool mainScreen)
@@ -157,11 +199,27 @@ void TapeSetupPanel::setCompactToolbarMode(bool compact)
 void TapeSetupPanel::setMixtapeMode(bool mixtape)
 {
     mixtapeMode = mixtape;
-    tapeLengthBox.setVisible(mixtape || !mainScreenMode);
-    tapeLengthLabel.setVisible(mainScreenMode && mixtape);
-    customMinutesSlider.setVisible(mixtape && tapeLengthBox.getSelectedId() == 4);
+    const bool showLengthControls = mixtape || !mainScreenMode;
+    lengthBtnCustom.setVisible(mainScreenMode && mixtape);
+    lengthBtnC60.setVisible(mainScreenMode && mixtape);
+    lengthBtnC90.setVisible(mainScreenMode && mixtape);
+    lengthBtnC120.setVisible(mainScreenMode && mixtape);
+    tapeLengthBox.setVisible(!mainScreenMode && showLengthControls);
+    tapeLengthLabel.setVisible(!mainScreenMode && mixtape);
+    tapeFitLabel.setVisible(mainScreenMode && mixtape);
+    updateLengthControlPresentation();
     if (!mainScreenMode)
         prepareButton.setButtonText(mixtape ? "Build Side A/B WAV" : "Prepare for Tape");
+    if (!mixtape)
+        tapeFitLabel.setText({}, juce::dontSendNotification);
+    resized();
+    repaint();
+}
+
+void TapeSetupPanel::setTapeFitSummary(const juce::String& text, bool ok)
+{
+    tapeFitLabel.setText(text, juce::dontSendNotification);
+    tapeFitLabel.setColour(juce::Label::textColourId, ok ? ui::Theme::okGreen() : ui::Theme::warnAmber());
     resized();
     repaint();
 }
@@ -184,7 +242,11 @@ void TapeSetupPanel::setInteractionEnabled(bool enabled)
     presetBox.setEnabled(enabled);
     tapeTypeBox.setEnabled(enabled);
     tapeLengthBox.setEnabled(enabled);
-    customMinutesSlider.setEnabled(enabled && tapeLengthBox.getSelectedId() == 4);
+    lengthBtnCustom.setEnabled(enabled);
+    lengthBtnC60.setEnabled(enabled);
+    lengthBtnC90.setEnabled(enabled);
+    lengthBtnC120.setEnabled(enabled);
+    updateLengthControlPresentation();
     preflightToggle.setEnabled(enabled);
 
     applyTapeTypeLockPresentation();
@@ -282,6 +344,37 @@ void TapeSetupPanel::refreshTypeSegmentStyles()
     ui::Theme::styleTapeTypeSegment(typeBtnIV, typeBtnIV.getToggleState(), enabled);
 }
 
+void TapeSetupPanel::refreshLengthSegmentStyles()
+{
+    const bool enabled = interactionEnabled && isEnabled();
+    ui::Theme::styleTapeTypeSegment(lengthBtnCustom, lengthBtnCustom.getToggleState(), enabled);
+    ui::Theme::styleTapeTypeSegment(lengthBtnC60, lengthBtnC60.getToggleState(), enabled);
+    ui::Theme::styleTapeTypeSegment(lengthBtnC90, lengthBtnC90.getToggleState(), enabled);
+    ui::Theme::styleTapeTypeSegment(lengthBtnC120, lengthBtnC120.getToggleState(), enabled);
+}
+
+void TapeSetupPanel::syncLengthFromButtons()
+{
+    if (lengthBtnCustom.getToggleState())
+        tapeLengthBox.setSelectedId(4, juce::dontSendNotification);
+    else if (lengthBtnC60.getToggleState())
+        tapeLengthBox.setSelectedId(1, juce::dontSendNotification);
+    else if (lengthBtnC120.getToggleState())
+        tapeLengthBox.setSelectedId(3, juce::dontSendNotification);
+    else
+        tapeLengthBox.setSelectedId(2, juce::dontSendNotification);
+    refreshLengthSegmentStyles();
+}
+
+void TapeSetupPanel::updateLengthControlPresentation()
+{
+    const bool customSelected = isCustomTapeLengthSelected();
+    customMinutesSlider.setVisible(mixtapeMode && customSelected);
+    customMinutesSlider.setEnabled(interactionEnabled && customSelected);
+    ui::Theme::styleAccentSlider(customMinutesSlider);
+    resized();
+}
+
 void TapeSetupPanel::notifyChanged()
 {
     if (onSetupChanged)
@@ -299,7 +392,14 @@ void TapeSetupPanel::paint(juce::Graphics& g)
     if (compactToolbarMode)
         return;
 
-    ui::Theme::drawSectionLabel(g, getLocalBounds().reduced(14, 12).removeFromTop(18), "Tape parameters");
+    auto header = getLocalBounds().reduced(14, 12);
+    ui::Theme::drawSectionLabel(g, header.removeFromTop(18), "Tape parameters");
+
+    if (mixtapeMode)
+    {
+        header.removeFromTop(32 + 10);
+        ui::Theme::drawSectionLabel(g, header.removeFromTop(18), "Cassette length");
+    }
 }
 
 void TapeSetupPanel::resized()
@@ -355,14 +455,30 @@ void TapeSetupPanel::resized()
 
         if (mixtapeMode)
         {
-            r.removeFromTop(16);
-            tapeLengthLabel.setBounds(r.removeFromTop(18));
-            r.removeFromTop(4);
-            tapeLengthBox.setBounds(r.removeFromTop(28));
-            if (tapeLengthBox.getSelectedId() == 4)
+            r.removeFromTop(10);
+            r.removeFromTop(18);
+
+            auto lengthRow = r.removeFromTop(32);
+            const int lenGap = 4;
+            const int lenSegW = (lengthRow.getWidth() - lenGap * 3) / 4;
+            lengthBtnC60.setBounds(lengthRow.removeFromLeft(lenSegW));
+            lengthRow.removeFromLeft(lenGap);
+            lengthBtnC90.setBounds(lengthRow.removeFromLeft(lenSegW));
+            lengthRow.removeFromLeft(lenGap);
+            lengthBtnC120.setBounds(lengthRow.removeFromLeft(lenSegW));
+            lengthRow.removeFromLeft(lenGap);
+            lengthBtnCustom.setBounds(lengthRow);
+
+            if (lengthBtnCustom.getToggleState())
             {
                 r.removeFromTop(6);
                 customMinutesSlider.setBounds(r.removeFromTop(28));
+            }
+
+            if (tapeFitLabel.getText().isNotEmpty())
+            {
+                r.removeFromTop(8);
+                tapeFitLabel.setBounds(r.removeFromTop(juce::jmin(36, r.getHeight())));
             }
         }
         return;
@@ -407,6 +523,19 @@ void TapeSetupPanel::buttonClicked(juce::Button* b)
     else if (b == &typeBtnI || b == &typeBtnII || b == &typeBtnIV)
     {
         syncTypeFromButtons();
+        notifyChanged();
+    }
+    else if (b == &lengthBtnCustom || b == &lengthBtnC60 || b == &lengthBtnC90 || b == &lengthBtnC120)
+    {
+        if (b == &lengthBtnC60)
+            customMinutesSlider.setValue(30.0, juce::dontSendNotification);
+        else if (b == &lengthBtnC90)
+            customMinutesSlider.setValue(45.0, juce::dontSendNotification);
+        else if (b == &lengthBtnC120)
+            customMinutesSlider.setValue(60.0, juce::dontSendNotification);
+
+        syncLengthFromButtons();
+        updateLengthControlPresentation();
         notifyChanged();
     }
 }

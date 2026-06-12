@@ -322,10 +322,15 @@ static void testFolderMixSplitsAcrossTwoSides(TestContext& ctx)
     ctx.expectTrue(report.split.needsSideB, "should split to side B");
     ctx.expectTrue(report.sideATrackCount >= 1 && report.sideBTrackCount >= 1,
                    "both sides should have tracks");
-    ctx.expectTrue(report.split.sideADurationSec <= report.allowedSec + 1.0,
-                   "side A within capacity");
-    ctx.expectTrue(report.split.sideBDurationSec <= report.allowedSec + 1.0,
-                   "side B within capacity");
+    const double sideCap = report.allowedSec + 2.0 * scan.gapBetweenTracksSec + 1.0;
+    ctx.expectTrue(report.split.sideADurationSec <= sideCap, "side A within capacity");
+    ctx.expectTrue(report.split.sideBDurationSec <= sideCap, "side B within capacity");
+
+    const double imbalance = std::abs(report.split.sideADurationSec - report.split.sideBDurationSec);
+    const double greedyImbalance = (4.0 * 10.0 * 60.0 + 3.0 * scan.gapBetweenTracksSec)
+                                   - (1.0 * 10.0 * 60.0);
+    ctx.expectTrue(imbalance < greedyImbalance - 60.0,
+                   "split should balance sides instead of maxing side A");
 }
 
 static void testMultiCassetteSplitWhenAlbumExceedsOneTape(TestContext& ctx)
@@ -352,9 +357,10 @@ static void testMultiCassetteSplitWhenAlbumExceedsOneTape(TestContext& ctx)
 
     for (const auto& cassette : report.cassettes)
     {
-        ctx.expectTrue(cassette.sideADurationSec <= report.allowedSec + 1.0, "cassette side A within cap");
+        const double sideCap = report.allowedSec + 2.0 * scan.gapBetweenTracksSec + 1.0;
+        ctx.expectTrue(cassette.sideADurationSec <= sideCap, "cassette side A within cap");
         if (cassette.hasSideB)
-            ctx.expectTrue(cassette.sideBDurationSec <= report.allowedSec + 1.0, "cassette side B within cap");
+            ctx.expectTrue(cassette.sideBDurationSec <= sideCap, "cassette side B within cap");
     }
 
     const auto& first = report.cassettes.front();

@@ -25,6 +25,8 @@ EssentiaRuntime& essentiaRuntime()
     return runtime;
 }
 
+juce::CriticalSection essentiaLock;
+
 std::vector<essentia::Real> toMonoVector(const juce::AudioBuffer<float>& buffer)
 {
     const int n = buffer.getNumSamples();
@@ -60,6 +62,8 @@ std::optional<float> EssentiaBridge::integratedLufs(const juce::AudioBuffer<floa
         return std::nullopt;
 
     juce::ignoreUnused(essentiaRuntime());
+
+    const juce::ScopedLock sl(essentiaLock);
 
     try
     {

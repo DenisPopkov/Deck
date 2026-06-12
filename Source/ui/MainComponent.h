@@ -105,6 +105,7 @@ private:
     static constexpr int kRightSidebarW = 0;
 
     bool mixtapeModeActive = false;
+    bool folderFitOk = true;
     bool hasSource = false;
     bool hasProcessed = false;
 

@@ -1,6 +1,9 @@
 #include "FolderMixBuilder.h"
 #include "../io/AudioFileLoader.h"
+#include "../util/AppLog.h"
 #include <algorithm>
+#include <cmath>
+#include <limits>
 
 namespace cassette
 {
@@ -23,6 +26,104 @@ double readFileDurationSec(const juce::File& file)
     return static_cast<double>(reader->lengthInSamples) / reader->sampleRate;
 }
 
+bool isExportedSideWav(const juce::File& file)
+{
+    const auto name = file.getFileName();
+    return name.endsWithIgnoreCase(" Side A.wav") || name.endsWithIgnoreCase(" Side B.wav");
+}
+
+double durationRangeSec(const FolderScanResult& scan, int beginIndex, int endIndex)
+{
+    if (beginIndex >= endIndex)
+        return 0.0;
+
+    double cursor = 0.0;
+    for (int i = beginIndex; i < endIndex; ++i)
+    {
+        if (i > beginIndex)
+            cursor += scan.gapBetweenTracksSec;
+        cursor += scan.tracks[static_cast<size_t>(i)].durationSec;
+    }
+    return cursor;
+}
+
+double sideCapacitySec(const FolderScanResult& scan, double capSec)
+{
+    return capSec + 2.0 * scan.gapBetweenTracksSec + 1.0;
+}
+
+bool sideFitsCapacity(const FolderScanResult& scan, double durationSec, double capSec)
+{
+    return durationSec <= sideCapacitySec(scan, capSec);
+}
+
+int greedyPackEndIndex(const FolderScanResult& scan, int beginIndex, int endIndex, double capSec)
+{
+    double cursor = 0.0;
+    int i = beginIndex;
+    for (; i < endIndex; ++i)
+    {
+        double add = scan.tracks[static_cast<size_t>(i)].durationSec;
+        if (i > beginIndex)
+            add += scan.gapBetweenTracksSec;
+
+        if (cursor + add <= sideCapacitySec(scan, capSec))
+        {
+            cursor += add;
+            continue;
+        }
+        break;
+    }
+    return i;
+}
+
+int findBalancedSplitIndex(const FolderScanResult& scan, int beginIndex, int endIndex, double capSec)
+{
+    if (beginIndex >= endIndex)
+        return beginIndex;
+
+    const int trackCount = endIndex - beginIndex;
+    if (trackCount <= 1)
+        return endIndex;
+
+    const double totalSec = durationRangeSec(scan, beginIndex, endIndex);
+    if (sideFitsCapacity(scan, totalSec, capSec))
+        return endIndex;
+
+    int bestSplit = -1;
+    double bestDiff = std::numeric_limits<double>::max();
+
+    for (int split = beginIndex + 1; split < endIndex; ++split)
+    {
+        const double sideASec = durationRangeSec(scan, beginIndex, split);
+        const double sideBSec = durationRangeSec(scan, split, endIndex);
+        if (!sideFitsCapacity(scan, sideASec, capSec) || !sideFitsCapacity(scan, sideBSec, capSec))
+            continue;
+
+        const double diff = std::abs(sideASec - sideBSec);
+        if (diff < bestDiff)
+        {
+            bestDiff = diff;
+            bestSplit = split;
+        }
+    }
+
+    if (bestSplit >= 0)
+        return bestSplit;
+
+    return greedyPackEndIndex(scan, beginIndex, endIndex, capSec);
+}
+
+int endIndexForCassetteChunk(const FolderScanResult& scan, int beginIndex, double maxCassetteSec)
+{
+    const int n = static_cast<int>(scan.tracks.size());
+    int endIndex = beginIndex + 1;
+    while (endIndex < n
+           && durationRangeSec(scan, beginIndex, endIndex + 1) <= maxCassetteSec + 1.0)
+        ++endIndex;
+    return endIndex;
+}
+
 }
 
 TapeLengthSpec tapeLengthSpecForPreset(TapeLengthPreset preset, double customMinutesPerSide)
@@ -32,7 +133,11 @@ TapeLengthSpec tapeLengthSpecForPreset(TapeLengthPreset preset, double customMin
         case TapeLengthPreset::C60: return { "C60", 30.0 };
         case TapeLengthPreset::C120: return { "C120", 60.0 };
         case TapeLengthPreset::Custom:
-            return { "Custom", juce::jmax(1.0, customMinutesPerSide) };
+        {
+            const auto mins = juce::jmax(1.0, customMinutesPerSide);
+            const auto label = "Custom (" + juce::String(juce::roundToInt(mins)) + " min)";
+            return { label, mins };
+        }
         case TapeLengthPreset::C90:
         default: return { "C90", 45.0 };
     }
@@ -89,6 +194,8 @@ juce::String FolderMixBuilder::formatDuration(double seconds)
 
 FolderScanResult FolderMixBuilder::scanFolder(const juce::File& folder, double gapBetweenTracksSec)
 {
+    ScopedTimer scanTimer("folder-scan", folder.getFileName());
+
     FolderScanResult result;
     result.folder = folder;
     result.gapBetweenTracksSec = juce::jmax(0.0, gapBetweenTracksSec);
@@ -96,24 +203,41 @@ FolderScanResult FolderMixBuilder::scanFolder(const juce::File& folder, double g
     if (!folder.isDirectory())
     {
         result.error = "Not a folder: " + folder.getFullPathName();
+        log("folder-scan error: " + result.error);
         return result;
     }
 
     juce::Array<juce::File> files;
     folder.findChildFiles(files, juce::File::findFiles, false);
+    log("folder-scan: found " + juce::String(files.size()) + " files in " + folder.getFullPathName());
 
     for (const auto& f : files)
     {
         if (!AudioFileLoader::isSupportedAudioFile(f))
             continue;
 
+        if (isExportedSideWav(f))
+        {
+            log("folder-scan skip (export output): " + f.getFileName());
+            continue;
+        }
+
+        const double t0 = juce::Time::getMillisecondCounterHiRes();
         FolderTrackInfo info;
         info.file = f;
         info.displayName = f.getFileNameWithoutExtension();
         info.durationSec = readFileDurationSec(f);
-        if (info.durationSec <= 0.0)
-            continue;
+        const double readMs = juce::Time::getMillisecondCounterHiRes() - t0;
 
+        if (info.durationSec <= 0.0)
+        {
+            log("folder-scan skip (no duration): " + f.getFileName());
+            continue;
+        }
+
+        logTiming("folder-scan-track",
+                  readMs,
+                  f.getFileName() + " (" + formatDuration(info.durationSec) + ")");
         result.tracks.push_back(std::move(info));
     }
 
@@ -136,6 +260,8 @@ FolderScanResult FolderMixBuilder::scanFolder(const juce::File& folder, double g
     }
 
     result.success = true;
+    log("folder-scan done: " + juce::String(result.tracks.size()) + " tracks, total "
+        + formatDuration(result.totalDurationSec));
     return result;
 }
 
@@ -159,49 +285,44 @@ std::vector<CassettePlan> FolderMixBuilder::computeMultiCassetteSplit(const Fold
 {
     std::vector<CassettePlan> cassettes;
     const double cap = juce::jmax(1.0, allowedSecPerSide);
+    const double maxCassetteSec = cap * 2.0;
     const int n = static_cast<int>(scan.tracks.size());
     int trackIdx = 0;
     int cassetteNum = 1;
 
-    auto packSide = [&](int startIdx, double& outDuration) {
-        double cursor = 0.0;
-        int i = startIdx;
-        for (; i < n; ++i)
-        {
-            double add = scan.tracks[static_cast<size_t>(i)].durationSec;
-            if (i > startIdx)
-                add += scan.gapBetweenTracksSec;
-
-            if (cursor + add <= cap + 1.0)
-            {
-                cursor += add;
-                continue;
-            }
-            break;
-        }
-        outDuration = cursor;
-        return i;
-    };
-
     while (trackIdx < n)
     {
+        const int chunkEnd = endIndexForCassetteChunk(scan, trackIdx, maxCassetteSec);
+        const double chunkSec = durationRangeSec(scan, trackIdx, chunkEnd);
+
         CassettePlan plan;
         plan.cassetteNumber = cassetteNum++;
         plan.sideAStartTrack = trackIdx;
-        trackIdx = packSide(trackIdx, plan.sideADurationSec);
-        plan.sideAEndTrack = trackIdx;
 
-        if (trackIdx >= n)
+        if (sideFitsCapacity(scan, chunkSec, cap))
         {
+            plan.sideAEndTrack = chunkEnd;
+            plan.sideADurationSec = chunkSec;
+            plan.hasSideB = false;
             cassettes.push_back(plan);
-            break;
+            trackIdx = chunkEnd;
+            continue;
         }
 
-        plan.sideBStartTrack = trackIdx;
-        trackIdx = packSide(trackIdx, plan.sideBDurationSec);
-        plan.sideBEndTrack = trackIdx;
-        plan.hasSideB = plan.sideBEndTrack > plan.sideBStartTrack;
+        const int split = findBalancedSplitIndex(scan, trackIdx, chunkEnd, cap);
+        plan.sideAEndTrack = split;
+        plan.sideADurationSec = durationRangeSec(scan, trackIdx, split);
+
+        if (split < chunkEnd)
+        {
+            plan.sideBStartTrack = split;
+            plan.sideBEndTrack = chunkEnd;
+            plan.sideBDurationSec = durationRangeSec(scan, split, chunkEnd);
+            plan.hasSideB = true;
+        }
+
         cassettes.push_back(plan);
+        trackIdx = chunkEnd;
     }
 
     return cassettes;

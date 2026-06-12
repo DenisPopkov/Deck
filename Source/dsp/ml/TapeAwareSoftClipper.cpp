@@ -8,16 +8,16 @@ namespace cassette
 namespace
 {
 
-OnnxStnRunner& sharedOnnxRunner()
+OnnxStnRunner& threadOnnxRunner()
 {
-    static OnnxStnRunner* runner = new OnnxStnRunner();
-    static bool attempted = false;
+    thread_local OnnxStnRunner runner;
+    thread_local bool attempted = false;
     if (!attempted)
     {
         attempted = true;
-        runner->tryLoadDefaultModel();
+        runner.tryLoadDefaultModel();
     }
-    return *runner;
+    return runner;
 }
 
 }
@@ -46,7 +46,7 @@ float TapeAwareSoftClipper::tanhSaturation(float x, float drive) const
 void TapeAwareSoftClipper::process(juce::AudioBuffer<float>& buffer)
 {
 #if defined(CASSETTE_HAS_ONNX)
-    auto& onnx = sharedOnnxRunner();
+    auto& onnx = threadOnnxRunner();
     if (onnx.isLoaded())
     {
         onnx.process(buffer, profile, sampleRate);

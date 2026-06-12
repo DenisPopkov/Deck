@@ -8,6 +8,7 @@
 #include "../export/PreflightTones.h"
 #include "../project/SideRenderer.h"
 #include "../dsp/AudioConstants.h"
+#include "../util/AppLog.h"
 
 namespace cassette
 {
@@ -47,9 +48,7 @@ public:
 
     void paint(juce::Graphics& g) override
     {
-        g.fillAll(ui::Theme::card());
-        g.setColour(ui::Theme::border());
-        g.drawRect(getLocalBounds().toFloat().reduced(0.5f), 1.0f);
+        ui::Theme::drawCard(g, getLocalBounds(), juce::String());
     }
 
     void resized() override
@@ -96,10 +95,43 @@ private:
     {
         if (onResult)
             onResult(result);
-
-        if (auto* dw = findParentComponentOfClass<juce::DialogWindow>())
-            dw->exitModalState(result);
     }
+};
+
+class ChangeTapeTypeModal : public juce::Component
+{
+public:
+    std::function<void(int)> onResult;
+
+    ChangeTapeTypeModal()
+    {
+        dialog.onResult = [this](int result) {
+            if (onResult)
+                onResult(result);
+            exitModalState(result);
+        };
+
+        addAndMakeVisible(dialog);
+        setWantsKeyboardFocus(true);
+    }
+
+    void paint(juce::Graphics& g) override
+    {
+        g.fillAll(juce::Colours::black.withAlpha(0.55f));
+    }
+
+    void resized() override
+    {
+        dialog.setBounds(getLocalBounds().withSizeKeepingCentre(dialog.getWidth(), dialog.getHeight()));
+    }
+
+    bool keyPressed(const juce::KeyPress& key) override
+    {
+        return dialog.keyPressed(key) || juce::Component::keyPressed(key);
+    }
+
+private:
+    ChangeTapeTypeDialog dialog;
 };
 
 }
@@ -128,7 +160,12 @@ MainComponent::MainComponent()
     tapeSetupPanel.setMainScreenMode(true);
     tapeSetupPanel.setCompactToolbarMode(true);
     tapeSetupPanel.setMixtapeMode(false);
-    tapeSetupPanel.onSetupChanged = [this] { refreshFolderFitLabel(); };
+    tapeSetupPanel.onSetupChanged = [this] {
+        refreshFolderFitLabel();
+        if (mixtapeModeActive && hasProcessed)
+            invalidatePreparedOutput();
+        resized();
+    };
     tapeSetupPanel.onChangeTapeTypeRequested = [this] { promptChangeTapeType(); };
 
     Theme::applyLabel(sessionLabel, Theme::captionFont(), Theme::textMuted());
@@ -248,6 +285,7 @@ void MainComponent::updateWizardState()
     dropHero.setVisible(!hasSource);
     compareWaveform.setVisible(hasSource);
     tapeSetupPanel.setMixtapeMode(mixtapeModeActive);
+    tapeSetupPanel.setCompactToolbarMode(!mixtapeModeActive);
 
     importButton.setEnabled(!busy);
     dropHero.setInteractionEnabled(!busy);
@@ -256,7 +294,8 @@ void MainComponent::updateWizardState()
     mixtapePanel.setBusy(busy);
 
     startButton.setVisible(!hasProcessed || busy);
-    startButton.setEnabled(hasSource && !busy && !hasProcessed);
+    startButton.setEnabled(hasSource && !busy && !hasProcessed
+                           && (!mixtapeModeActive || folderFitOk));
     startButton.setButtonText("Prepare");
     newButton.setEnabled((hasSource || hasProcessed) && !busy);
     exportButton.setEnabled(!busy && hasProcessed && loadedAudio.has_value());
@@ -268,35 +307,7 @@ void MainComponent::updateWizardState()
 
 void MainComponent::updateReadySummary()
 {
-    if (!hasProcessed)
-    {
-        readySummary.setVisible(false);
-        return;
-    }
-
-    readySummary.setVisible(true);
-    if (mixtapeCassetteCount > 1)
-    {
-        readySummary.setText("Ready  |  " + juce::String(mixtapeCassetteCount) + " cassettes  |  Cassette 1 Side A: "
-                                 + juce::String(sideADurationSec / 60.0, 1) + " min",
-                             juce::dontSendNotification);
-    }
-    else if (hasSideB)
-    {
-        readySummary.setText("Ready for cassette  |  Side A: " + juce::String(sideADurationSec / 60.0, 1)
-                                 + " min  |  Side B: " + juce::String(sideBDurationSec / 60.0, 1) + " min",
-                             juce::dontSendNotification);
-    }
-    else
-    {
-        const double dur = loadedAudio.has_value()
-                               ? loadedAudio->buffer.getNumSamples() / loadedAudio->sampleRate
-                               : 0.0;
-        juce::String summary = "Ready for cassette";
-        summary += "  |  " + tapeSetup().getCassetteProfile().displayName;
-        summary += "  |  " + juce::String(dur / 60.0, 1) + " min";
-        readySummary.setText(summary, juce::dontSendNotification);
-    }
+    readySummary.setVisible(false);
 }
 
 void MainComponent::updateWaveformInfo(const AudioFeatures& source, const AudioFeatures* processed)
@@ -424,7 +435,8 @@ void MainComponent::resized()
     if (mixtapeModeActive)
     {
         tapeSetupPanel.setCompactToolbarMode(false);
-        tapeSetupPanel.setBounds(centre.removeFromTop(118).reduced(12, 0));
+        const int tapePanelH = tapeSetupPanel.isCustomTapeLengthSelected() ? 204 : 172;
+        tapeSetupPanel.setBounds(centre.removeFromTop(tapePanelH).reduced(12, 0));
         centre.removeFromTop(4);
     }
 
@@ -585,6 +597,8 @@ void MainComponent::resetSession()
     playAfterButton.setEnabled(false);
 
     tapeSetupPanel.setMixtapeMode(false);
+    tapeSetupPanel.setTapeFitSummary({}, true);
+    folderFitOk = true;
     mixtapePanel.setFitReport("", true);
     mixtapePanel.setBusy(false);
 
@@ -619,21 +633,17 @@ void MainComponent::promptChangeTapeType()
     if (!hasProcessed || isProcessing.load())
         return;
 
-    auto* content = new ChangeTapeTypeDialog();
-    content->onResult = [this](int result) {
+    auto* modal = new ChangeTapeTypeModal();
+    modal->onResult = [this](int result) {
         if (result == 1)
             invalidatePreparedOutput();
     };
 
-    juce::DialogWindow::LaunchOptions opts;
-    opts.content.setOwned(content);
-    opts.dialogTitle = {};
-    opts.dialogBackgroundColour = ui::Theme::card();
-    opts.useNativeTitleBar = false;
-    opts.resizable = false;
-    opts.escapeKeyTriggersCloseButton = false;
-    opts.componentToCentreAround = this;
-    opts.launchAsync();
+    modal->setBounds(getLocalBounds());
+    addAndMakeVisible(modal);
+    modal->toFront(true);
+    modal->grabKeyboardFocus();
+    modal->enterModalState(true, nullptr, true);
 }
 
 void MainComponent::pickFolder()
@@ -662,15 +672,26 @@ void MainComponent::pickFolder()
 void MainComponent::refreshFolderFitLabel()
 {
     if (!folderScan.has_value() || !folderScan->success)
+    {
+        folderFitOk = true;
+        tapeSetupPanel.setTapeFitSummary({}, true);
         return;
+    }
 
     const auto report = FolderMixBuilder::analyzeFit(*folderScan, tapeSetup().getTapeLengthSpec());
+    folderFitOk = report.fits;
     mixtapePanel.setFitReport(report.summary(), report.fits);
     mixtapePanel.setBuildEnabled(report.fits && !isProcessing.load());
+    tapeSetupPanel.setTapeFitSummary(report.summary(), report.fits);
+
+    if (mixtapeModeActive)
+        setStatus(report.summary(), report.fits ? ui::Theme::textPrimary() : ui::Theme::warnAmber());
 }
 
 void MainComponent::scanMixFolder(const juce::File& folder)
 {
+    log("UI: Import folder requested - " + folder.getFullPathName());
+
     folderScan.reset();
     hasProcessed = false;
     hasSource = false;
@@ -685,6 +706,7 @@ void MainComponent::scanMixFolder(const juce::File& folder)
             mixtapePanel.setBusy(false);
             if (!scan.success)
             {
+                log("UI: folder scan failed - " + scan.error);
                 mixtapePanel.setFitReport(scan.error, false);
                 setStatus(scan.error, ui::Theme::failRed());
                 return;
@@ -692,13 +714,14 @@ void MainComponent::scanMixFolder(const juce::File& folder)
             folderScan = scan;
             mixtapePanel.setFolderScan(scan, folder);
             hasSource = true;
+            log("UI: folder scan OK - " + juce::String(scan.tracks.size()) + " tracks");
             sessionLabel.setText(folder.getFileName() + "\n" + juce::String(scan.tracks.size()) + " tracks",
                                  juce::dontSendNotification);
             refreshFolderFitLabel();
             resized();
-            setStatus("Added " + juce::String(scan.tracks.size()) + " tracks ("
-                          + FolderMixBuilder::formatDuration(scan.totalDurationSec) + ")",
-                      ui::Theme::textPrimary());
+            const auto fitReport = FolderMixBuilder::analyzeFit(scan, tapeSetup().getTapeLengthSpec());
+            setStatus(fitReport.summary(),
+                      fitReport.fits ? ui::Theme::textPrimary() : ui::Theme::warnAmber());
             updateWizardState();
         });
     });
@@ -800,9 +823,8 @@ void MainComponent::startProcessing()
             lastProcessedFeatures = mastered.featuresAfter;
             updateWaveformInfo(features, &mastered.featuresAfter);
 
-            juce::String msg = "Ready: " + juce::String(mastered.featuresAfter.integratedLUFS, 1) + " LUFS ("
-                                 + juce::String(ms / 1000.0, 1) + " s)";
-            finishProcessing(true, msg);
+            juce::ignoreUnused(ms);
+            finishProcessing(true, {});
             exportButton.setEnabled(true);
             updateReadySummary();
             resized();
@@ -850,9 +872,13 @@ void MainComponent::startFolderMixBuild()
                                     : "Preparing Side A and Side B...",
               ui::Theme::warnAmber());
 
+    log("UI: Build mixtape started - " + juce::String(scanCopy.tracks.size()) + " tracks, "
+        + juce::String(fit.cassetteCount) + " cassette(s), out=" + outFolder.getFullPathName());
+
     worker.enqueue([this, scanCopy, profile, options, projectName, outFolder, allowedSec, fit]() {
         try
         {
+            ScopedTimer buildTimer("folder-build", projectName + " (" + juce::String(scanCopy.tracks.size()) + " tracks)");
             const double sampleRate = kProjectSampleRate;
             const int totalTracks = static_cast<int>(scanCopy.tracks.size());
 
@@ -875,6 +901,9 @@ void MainComponent::startFolderMixBuild()
 
             for (const auto& cassettePlan : fit.cassettes)
             {
+                log("folder-build: cassette " + juce::String(cassettePlan.cassetteNumber) + "/"
+                    + juce::String(fit.cassetteCount));
+
                 auto project = FolderMixBuilder::buildCassetteProject(scanCopy,
                                                                     cassettePlan,
                                                                     projectName,

@@ -99,10 +99,7 @@ struct Theme
 
     static void styleExportButton(juce::TextButton& b)
     {
-        b.setColour(juce::TextButton::buttonColourId, exportGreen());
-        b.setColour(juce::TextButton::buttonOnColourId, exportGreen().brighter(0.1f));
-        b.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
-        b.setColour(juce::TextButton::textColourOnId, juce::Colours::white);
+        styleRecButton(b);
     }
 
     enum class TransportButtonStyle { Neutral, Black, Rec, Export };
@@ -158,6 +155,17 @@ struct Theme
         box.setColour(juce::ComboBox::arrowColourId, textSecondary());
         box.setColour(juce::PopupMenu::backgroundColourId, card());
         box.setColour(juce::PopupMenu::textColourId, textPrimary());
+    }
+
+    static void styleAccentSlider(juce::Slider& slider)
+    {
+        slider.setColour(juce::Slider::backgroundColourId, sidebarHighlight());
+        slider.setColour(juce::Slider::trackColourId, accent());
+        slider.setColour(juce::Slider::thumbColourId, accent().darker(0.15f));
+        slider.setColour(juce::Slider::textBoxTextColourId, textPrimary());
+        slider.setColour(juce::Slider::textBoxBackgroundColourId, card());
+        slider.setColour(juce::Slider::textBoxOutlineColourId, border());
+        slider.setColour(juce::Slider::textBoxHighlightColourId, card());
     }
 
     static void drawPanel(juce::Graphics& g, juce::Rectangle<int> bounds, bool fill = true)
