@@ -59,4 +59,11 @@ void TapeAwareSoftClipper::process(juce::AudioBuffer<float>& buffer)
     grid.process(buffer, profile, sampleRate);
 }
 
+void warmThreadLocalOnnx()
+{
+#if defined(CASSETTE_HAS_ONNX)
+    threadOnnxRunner();
+#endif
+}
+
 }

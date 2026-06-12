@@ -8,6 +8,7 @@ namespace cassette
 enum class WizardPhase
 {
     AddMusic,
+    EditTracks,
     Preparing,
     ReadyToExport
 };
@@ -23,6 +24,7 @@ public:
 private:
     WizardPhase active = WizardPhase::AddMusic;
     bool musicDone = false;
+    bool editDone = false;
     bool prepareDone = false;
     bool exportDone = false;
 };

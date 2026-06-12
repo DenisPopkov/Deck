@@ -1,5 +1,6 @@
 #include "CassetteBurnerComponent.h"
 #include "../look/CassetteBurnerLook.h"
+#include "../UiTheme.h"
 #include "../../project/SideRenderer.h"
 #include "../../dsp/AudioConstants.h"
 #include "../../export/WavExporter.h"
@@ -30,8 +31,12 @@ CassetteBurnerComponent::CassetteBurnerComponent()
     addAndMakeVisible(sidebar);
     addAndMakeVisible(transportBar);
     addAndMakeVisible(timeline);
+    addChildComponent(trackListEditor);
     addAndMakeVisible(params);
     addAndMakeVisible(statusBar);
+
+    trackListEditor.onLayoutChanged = [this] { syncProjectFromEditor(); };
+    trackListEditor.setTapeSpec(folderTape);
 
     timeline.setProject(&project);
     timeline.addListener(this);
@@ -42,8 +47,23 @@ CassetteBurnerComponent::CassetteBurnerComponent()
         project = MixtapeProject();
         project.name = "Untitled Mixtape";
         projectFile = MixtapeProject::defaultProjectsFolder().getChildFile("Untitled.cassetteproj");
+        folderEditMode = false;
+        trackListEditor.setVisible(false);
+        timeline.setVisible(true);
         refreshUiFromProject();
         statusBar.setMessage("New project");
+    };
+    sidebar.onImportFolder = [this] {
+        auto chooser = std::make_shared<juce::FileChooser>("Import folder",
+                                                           juce::File(),
+                                                           "*",
+                                                           true);
+        chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
+                             [this, chooser](const juce::FileChooser& fc) {
+                                 const auto f = fc.getResult();
+                                 if (f.isDirectory())
+                                     scanFolderForEditor(f);
+                             });
     };
     sidebar.onImportAudio = [this] {
         auto chooser = std::make_shared<juce::FileChooser>("Import audio",
@@ -137,7 +157,61 @@ void CassetteBurnerComponent::resized()
     params.setBounds(right);
     auto top = r.removeFromTop(48);
     transportBar.setBounds(top);
-    timeline.setBounds(r);
+
+    if (folderEditMode)
+    {
+        timeline.setVisible(false);
+        trackListEditor.setVisible(true);
+        trackListEditor.setBounds(r);
+    }
+    else
+    {
+        trackListEditor.setVisible(false);
+        timeline.setVisible(true);
+        timeline.setBounds(r);
+    }
+}
+
+void CassetteBurnerComponent::scanFolderForEditor(const juce::File& folder)
+{
+    statusBar.setMessage("Scanning " + folder.getFileName() + "...");
+    worker.enqueue([this, folder]() {
+        const auto scan = FolderMixBuilder::scanFolder(folder);
+        juce::MessageManager::callAsync([this, scan, folder]() {
+            if (!scan.success)
+            {
+                statusBar.setMessage(scan.error);
+                return;
+            }
+
+            const auto fit = FolderMixBuilder::analyzeFit(scan, folderTape);
+            folderEditor.loadFromScan(scan, fit);
+            trackListEditor.setController(&folderEditor);
+            trackListEditor.setTapeSpec(folderTape);
+            trackListEditor.refresh();
+
+            project.name = folder.getFileName();
+            syncProjectFromEditor();
+
+            folderEditMode = true;
+            projectFile = MixtapeProject::defaultProjectsFolder().getChildFile(project.name + ".cassetteproj");
+            saveProject();
+            resized();
+            statusBar.setMessage(juce::String(scan.tracks.size()) + " tracks loaded — drag to reorder");
+        });
+    });
+}
+
+void CassetteBurnerComponent::syncProjectFromEditor()
+{
+    const double allowedSec = folderTape.minutesPerSide * 60.0;
+    const auto profile = project.profile;
+    project = folderEditor.buildPreviewProject(allowedSec);
+    project.name = folderEditor.sourceFolder().getFileName();
+    project.profile = profile;
+    timeline.setProject(&project);
+    refreshUiFromProject();
+    saveProject();
 }
 
 void CassetteBurnerComponent::timelineProjectChanged()

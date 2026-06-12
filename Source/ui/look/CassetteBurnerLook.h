@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
+#include "../UiTheme.h"
 
 namespace cassette
 {
@@ -10,11 +11,11 @@ class CassetteBurnerLook : public juce::LookAndFeel_V4
 public:
     CassetteBurnerLook();
 
-    static juce::Colour background() { return juce::Colour(0xff1a1a1e); }
-    static juce::Colour panel() { return juce::Colour(0xff25252b); }
-    static juce::Colour accent() { return juce::Colour(0xffff6b35); }
-    static juce::Colour textPrimary() { return juce::Colour(0xffe5e5e5); }
-    static juce::Colour gridLine() { return juce::Colour(0xff333338); }
+    static juce::Colour background() { return ui::Theme::background(); }
+    static juce::Colour panel() { return ui::Theme::panel(); }
+    static juce::Colour accent() { return ui::Theme::accent(); }
+    static juce::Colour textPrimary() { return ui::Theme::textPrimary(); }
+    static juce::Colour gridLine() { return ui::Theme::borderLight(); }
 
     void drawButtonBackground(juce::Graphics& g,
                             juce::Button& button,

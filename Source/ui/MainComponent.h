@@ -14,6 +14,8 @@
 #include "../threading/AnalysisWorker.h"
 #include "../dsp/CassetteProfile.h"
 #include "../project/FolderMixBuilder.h"
+#include "../project/MixtapeEditController.h"
+#include "TrackListEditor.h"
 #include "../audio/PreviewEngine.h"
 #include "../analysis/PerceptualQualityGuard.h"
 
@@ -68,6 +70,7 @@ private:
     void setUiProcessing(bool processing);
     void setProgress(double value);
     void setStatus(const juce::String& text, juce::Colour colour = juce::Colours::white);
+    void syncLayout();
     void paintProgressBar(juce::Graphics& g, juce::Rectangle<int> area) const;
     void updateWizardState();
     void syncTransportButtonStyles();
@@ -93,7 +96,10 @@ private:
     juce::TextButton playAfterButton { "Play After" };
 
     CompareWaveformDisplay compareWaveform;
+    TrackListEditor trackListEditor;
     MixtapeBuilderPanel mixtapePanel;
+
+    MixtapeEditController mixtapeEditor;
 
     juce::Label status;
     double progress = 0.0;
@@ -106,6 +112,7 @@ private:
 
     bool mixtapeModeActive = false;
     bool folderFitOk = true;
+    bool mixtapePanelBusy = false;
     bool hasSource = false;
     bool hasProcessed = false;
 

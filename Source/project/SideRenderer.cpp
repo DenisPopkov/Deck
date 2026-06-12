@@ -2,9 +2,11 @@
 #include "../io/AudioFileLoader.h"
 #include "../io/AudioResampler.h"
 #include "../dsp/graph/AdaptiveMasteringProcessor.h"
+#include "../dsp/ml/TapeAwareSoftClipper.h"
 #include "../util/AppLog.h"
 #include <algorithm>
 #include <atomic>
+#include <thread>
 #include <vector>
 
 namespace cassette
@@ -29,8 +31,9 @@ void ensureTimelineLength(juce::AudioBuffer<float>& timeline, int minSamples)
 
 int parallelWorkerCount(int clipCount)
 {
-    const int cores = juce::jmax(1, juce::SystemStats::getNumCpus());
-    return juce::jlimit(1, clipCount, juce::jmin(6, cores - 1));
+    const int hw = static_cast<int>(std::thread::hardware_concurrency());
+    const int cores = juce::jmax(2, hw > 0 ? hw : juce::SystemStats::getNumCpus());
+    return juce::jlimit(1, clipCount, juce::jmin(6, cores));
 }
 
 struct ClipProcessResult
@@ -95,99 +98,25 @@ ClipProcessResult processClip(const TapeClip& clip,
     return out;
 }
 
-struct ClipRenderPool
+struct ClipRenderTask
 {
-    ClipRenderPool(int workers,
-                   int totalClips,
-                   const std::vector<TapeClip>& clips,
-                   CassetteProfile profileIn,
-                   MasteringOptions masteringIn,
-                   float recLevelDbIn,
-                   double sampleRateIn,
-                   bool captureReferenceIn,
-                   SideRenderer::ProgressCallback progressIn,
-                   const juce::String& sideLabelIn)
-        : pool(workers),
-          clipCount(totalClips),
-          clipList(clips),
-          profile(std::move(profileIn)),
-          mastering(std::move(masteringIn)),
-          recLevelDb(recLevelDbIn),
-          sampleRate(sampleRateIn),
-          captureReference(captureReferenceIn),
-          onProgress(std::move(progressIn)),
-          sideLabel(sideLabelIn)
-    {
-        results.resize(static_cast<size_t>(clipCount));
-    }
-
-    bool run()
-    {
-        for (int w = 0; w < pool.getNumThreads(); ++w)
-            pool.addJob(new WorkerJob(*this), true);
-
-        pool.removeAllJobs(false, -1);
-        return ! failed.load();
-    }
-
-    juce::String firstError() const
-    {
-        const juce::ScopedLock sl(errorLock);
-        return failError;
-    }
+    int clipCount = 0;
+    const std::vector<TapeClip>* clipList = nullptr;
+    CassetteProfile profile;
+    MasteringOptions mastering;
+    float recLevelDb = 0.0f;
+    double sampleRate = 48000.0;
+    bool captureReference = false;
+    SideRenderer::ProgressCallback onProgress;
+    juce::String sideLabel;
 
     std::vector<ClipProcessResult> results;
-
-private:
-    class WorkerJob : public juce::ThreadPoolJob
-    {
-    public:
-        explicit WorkerJob(ClipRenderPool& ownerIn)
-            : juce::ThreadPoolJob("clip-render"), owner(ownerIn)
-        {
-        }
-
-        JobStatus runJob() override
-        {
-            for (;;)
-            {
-                if (owner.failed.load())
-                    return jobHasFinished;
-
-                const int clipIndex = owner.claimNextClip();
-                if (clipIndex < 0)
-                    return jobHasFinished;
-
-                auto processed = processClip(owner.clipList[static_cast<size_t>(clipIndex)],
-                                             owner.profile,
-                                             owner.mastering,
-                                             owner.recLevelDb,
-                                             owner.sampleRate,
-                                             owner.captureReference);
-
-                owner.results[static_cast<size_t>(clipIndex)] = std::move(processed);
-
-                if (! owner.results[static_cast<size_t>(clipIndex)].success)
-                {
-                    owner.setFailed(owner.results[static_cast<size_t>(clipIndex)].error);
-                    return jobHasFinished;
-                }
-
-                const auto& done = owner.results[static_cast<size_t>(clipIndex)];
-                logTiming("render-clip",
-                          done.elapsedMs,
-                          owner.sideLabel + " " + juce::String(clipIndex + 1) + "/" + juce::String(owner.clipCount)
-                              + ": " + done.title);
-
-                const int finished = owner.finishedCount.fetch_add(1) + 1;
-                if (owner.onProgress)
-                    owner.onProgress(finished, owner.clipCount, done.title);
-            }
-        }
-
-    private:
-        ClipRenderPool& owner;
-    };
+    juce::CriticalSection queueLock;
+    int nextClip = 0;
+    std::atomic<bool> failed { false };
+    std::atomic<int> finishedCount { 0 };
+    juce::CriticalSection errorLock;
+    juce::String failError;
 
     int claimNextClip()
     {
@@ -205,23 +134,45 @@ private:
         failed.store(true);
     }
 
-    juce::ThreadPool pool;
-    const int clipCount;
-    const std::vector<TapeClip>& clipList;
-    CassetteProfile profile;
-    MasteringOptions mastering;
-    float recLevelDb;
-    double sampleRate;
-    bool captureReference;
-    SideRenderer::ProgressCallback onProgress;
-    juce::String sideLabel;
+    void workerLoop()
+    {
+        warmThreadLocalOnnx();
 
-    juce::CriticalSection queueLock;
-    int nextClip = 0;
-    std::atomic<bool> failed { false };
-    std::atomic<int> finishedCount { 0 };
-    juce::CriticalSection errorLock;
-    juce::String failError;
+        for (;;)
+        {
+            if (failed.load())
+                return;
+
+            const int clipIndex = claimNextClip();
+            if (clipIndex < 0)
+                return;
+
+            auto processed = processClip(clipList->at(static_cast<size_t>(clipIndex)),
+                                         profile,
+                                         mastering,
+                                         recLevelDb,
+                                         sampleRate,
+                                         captureReference);
+
+            results[static_cast<size_t>(clipIndex)] = std::move(processed);
+
+            if (! results[static_cast<size_t>(clipIndex)].success)
+            {
+                setFailed(results[static_cast<size_t>(clipIndex)].error);
+                return;
+            }
+
+            const auto& done = results[static_cast<size_t>(clipIndex)];
+            logTiming("render-clip",
+                      done.elapsedMs,
+                      sideLabel + " " + juce::String(clipIndex + 1) + "/" + juce::String(clipCount) + ": "
+                          + done.title);
+
+            const int finished = finishedCount.fetch_add(1) + 1;
+            if (onProgress)
+                onProgress(finished, clipCount, done.title);
+        }
+    }
 };
 
 void mergeClipIntoTimeline(juce::AudioBuffer<float>& timeline, const ClipProcessResult& clip)
@@ -297,26 +248,35 @@ RenderResult SideRenderer::renderSide(const MixtapeProject& project,
 
     const double renderT0 = juce::Time::getMillisecondCounterHiRes();
 
-    ClipRenderPool pool(workers,
-                        clipCount,
-                        side.clips,
-                        profile,
-                        project.mastering,
-                        project.recLevelDb,
-                        sampleRate,
-                        captureUnmasteredReference,
-                        onProgress,
-                        sideLabel);
+    ClipRenderTask task;
+    task.clipCount = clipCount;
+    task.clipList = &side.clips;
+    task.profile = profile;
+    task.mastering = project.mastering;
+    task.recLevelDb = project.recLevelDb;
+    task.sampleRate = sampleRate;
+    task.captureReference = captureUnmasteredReference;
+    task.onProgress = onProgress;
+    task.sideLabel = sideLabel;
+    task.results.resize(static_cast<size_t>(clipCount));
 
-    if (! pool.run())
+    std::vector<std::thread> threads;
+    threads.reserve(static_cast<size_t>(workers));
+    for (int w = 0; w < workers; ++w)
+        threads.emplace_back([&task]() { task.workerLoop(); });
+
+    for (auto& t : threads)
+        t.join();
+
+    if (task.failed.load())
     {
-        result.error = pool.firstError();
+        result.error = task.failError;
         log("render-side error: " + result.error);
         return result;
     }
 
     int maxEndSample = 0;
-    for (const auto& clip : pool.results)
+    for (const auto& clip : task.results)
     {
         mergeClipIntoTimeline(timeline, clip);
         if (captureUnmasteredReference)

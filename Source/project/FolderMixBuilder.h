@@ -91,6 +91,12 @@ public:
 
     static FolderFitReport analyzeFit(const FolderScanResult& scan, const TapeLengthSpec& tape);
 
+    static FolderFitReport analyzeLayout(const FolderScanResult& scan,
+                                         int sideAEndIndex,
+                                         const TapeLengthSpec& tape);
+
+    static double sideDurationSec(const std::vector<FolderTrackInfo>& tracks, double gapBetweenTracksSec);
+
     static SideSplitPlan computeSideSplit(const FolderScanResult& scan, double allowedSecPerSide);
 
     static std::vector<CassettePlan> computeMultiCassetteSplit(const FolderScanResult& scan,
@@ -101,6 +107,15 @@ public:
                                             CassetteProfile profile,
                                             const MasteringOptions& mastering,
                                             double allowedSecPerSide);
+
+    static MixtapeProject buildProjectFromSides(const std::vector<FolderTrackInfo>& sideATracks,
+                                                const std::vector<FolderTrackInfo>& sideBTracks,
+                                                const juce::File& folder,
+                                                double gapBetweenTracksSec,
+                                                const juce::String& projectName,
+                                                CassetteProfile profile,
+                                                const MasteringOptions& mastering,
+                                                double allowedSecPerSide);
 
     static MixtapeProject buildCassetteProject(const FolderScanResult& scan,
                                                const CassettePlan& plan,

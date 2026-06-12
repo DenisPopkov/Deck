@@ -23,4 +23,7 @@ private:
     float tanhSaturation(float x, float drive) const;
 };
 
+/** Load thread-local ONNX session on the calling thread (for parallel workers). */
+void warmThreadLocalOnnx();
+
 }

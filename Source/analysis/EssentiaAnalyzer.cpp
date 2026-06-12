@@ -109,17 +109,21 @@ AudioFeatures EssentiaAnalyzer::extractFeaturesForMastering(const juce::AudioBuf
     if (buffer.getNumSamples() == 0 || buffer.getNumChannels() == 0)
         return f;
 
-    f.integratedLUFS = estimateIntegratedLufs(buffer, sampleRate);
+    // Full-track peak is cheap; heavy analysis uses a short excerpt only.
+    constexpr double kMasteringAnalysisSec = 30.0;
+    const auto analysis = excerpt(buffer, sampleRate, kMasteringAnalysisSec);
+
+    f.integratedLUFS = estimateIntegratedLufs(analysis, sampleRate);
     f.samplePeakDbfs = estimateSamplePeakDbfs(buffer);
-    f.truePeakDbfs = estimateTruePeakDbfs(buffer, sampleRate);
+    f.truePeakDbfs = estimateTruePeakDbfs(analysis, sampleRate);
 
     std::vector<float> mono;
-    makeMonoMix(buffer, mono);
-    f.rmsLevelDb = juce::Decibels::gainToDecibels(blockRms(mono.data(), buffer.getNumSamples()), -100.0f);
+    makeMonoMix(analysis, mono);
+    f.rmsLevelDb = juce::Decibels::gainToDecibels(blockRms(mono.data(), analysis.getNumSamples()), -100.0f);
     f.crestFactorDb = f.truePeakDbfs - f.rmsLevelDb;
 
-    estimateBandEnergyRatios(buffer, sampleRate, f.lfEnergyRatio, f.mfEnergyRatio, f.hfEnergyRatio);
-    f.psycho = PsychoacousticMetrics::analyze(buffer, sampleRate);
+    estimateBandEnergyRatios(analysis, sampleRate, f.lfEnergyRatio, f.mfEnergyRatio, f.hfEnergyRatio);
+    f.psycho = PsychoacousticMetrics::analyze(analysis, sampleRate);
     f.noiseFloorDbfs = -90.0f;
 
     return f;

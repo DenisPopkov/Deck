@@ -12,6 +12,11 @@
 namespace cassette
 {
 
+namespace
+{
+constexpr int kOnnxBlockSamples = 8192;
+}
+
 #if defined(CASSETTE_HAS_ONNX)
 struct OnnxStnRunner::Impl
 {
@@ -140,67 +145,73 @@ void OnnxStnRunner::process(juce::AudioBuffer<float>& buffer, const CassetteProf
     if (n == 0 || ch == 0)
         return;
 
-    std::vector<float> input(static_cast<size_t>(ch * n));
-    for (int c = 0; c < ch; ++c)
-        for (int i = 0; i < n; ++i)
-            input[static_cast<size_t>(c * n + i)] = buffer.getSample(c, i);
-
-    const std::array<int64_t, 3> audioShape { 1, ch, n };
+    const float drive = driveNorm(profile);
+    const float bias = biasNorm(profile);
     Ort::MemoryInfo memInfo = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
-    Ort::Value audioTensor = Ort::Value::CreateTensor<float>(memInfo,
-                                                               input.data(),
-                                                               input.size(),
-                                                               audioShape.data(),
-                                                               audioShape.size());
 
-    std::vector<Ort::Value> inputTensors;
-    inputTensors.push_back(std::move(audioTensor));
-
-    float drive = driveNorm(profile);
-    float bias = biasNorm(profile);
-    std::array<float, 1> driveData { drive };
-    std::array<float, 1> biasData { bias };
-    std::array<float, 2> stateData { stateL, stateR };
-
-    if (profileConditioned)
+    for (int offset = 0; offset < n; offset += kOnnxBlockSamples)
     {
-        const std::array<int64_t, 1> scalarShape { 1 };
-        const std::array<int64_t, 2> stateShape { 1, 2 };
+        const int blockN = juce::jmin(kOnnxBlockSamples, n - offset);
 
-        inputTensors.push_back(Ort::Value::CreateTensor<float>(memInfo,
-                                                                driveData.data(),
-                                                                driveData.size(),
-                                                                scalarShape.data(),
-                                                                scalarShape.size()));
-        inputTensors.push_back(Ort::Value::CreateTensor<float>(memInfo,
-                                                                biasData.data(),
-                                                                biasData.size(),
-                                                                scalarShape.data(),
-                                                                scalarShape.size()));
-        inputTensors.push_back(Ort::Value::CreateTensor<float>(memInfo,
-                                                                stateData.data(),
-                                                                stateData.size(),
-                                                                stateShape.data(),
-                                                                stateShape.size()));
-    }
+        std::vector<float> input(static_cast<size_t>(ch * blockN));
+        for (int c = 0; c < ch; ++c)
+            for (int i = 0; i < blockN; ++i)
+                input[static_cast<size_t>(c * blockN + i)] = buffer.getSample(c, offset + i);
 
-    auto outputTensors = impl->session->Run(Ort::RunOptions { nullptr },
-                                            impl->inputNames.data(),
-                                            inputTensors.data(),
-                                            inputTensors.size(),
-                                            impl->outputNames.data(),
-                                            impl->outputNames.size());
+        const std::array<int64_t, 3> audioShape { 1, ch, blockN };
+        Ort::Value audioTensor = Ort::Value::CreateTensor<float>(memInfo,
+                                                                   input.data(),
+                                                                   input.size(),
+                                                                   audioShape.data(),
+                                                                   audioShape.size());
 
-    float* outData = outputTensors[0].GetTensorMutableData<float>();
-    for (int c = 0; c < ch; ++c)
-        for (int i = 0; i < n; ++i)
-            buffer.setSample(c, i, outData[c * n + i]);
+        std::vector<Ort::Value> inputTensors;
+        inputTensors.push_back(std::move(audioTensor));
 
-    if (profileConditioned && outputTensors.size() > 1)
-    {
-        const float* stateOut = outputTensors[1].GetTensorData<float>();
-        stateL = stateOut[0];
-        stateR = stateOut[1];
+        std::array<float, 1> driveData { drive };
+        std::array<float, 1> biasData { bias };
+        std::array<float, 2> stateData { stateL, stateR };
+
+        if (profileConditioned)
+        {
+            const std::array<int64_t, 1> scalarShape { 1 };
+            const std::array<int64_t, 2> stateShape { 1, 2 };
+
+            inputTensors.push_back(Ort::Value::CreateTensor<float>(memInfo,
+                                                                    driveData.data(),
+                                                                    driveData.size(),
+                                                                    scalarShape.data(),
+                                                                    scalarShape.size()));
+            inputTensors.push_back(Ort::Value::CreateTensor<float>(memInfo,
+                                                                    biasData.data(),
+                                                                    biasData.size(),
+                                                                    scalarShape.data(),
+                                                                    scalarShape.size()));
+            inputTensors.push_back(Ort::Value::CreateTensor<float>(memInfo,
+                                                                    stateData.data(),
+                                                                    stateData.size(),
+                                                                    stateShape.data(),
+                                                                    stateShape.size()));
+        }
+
+        auto outputTensors = impl->session->Run(Ort::RunOptions { nullptr },
+                                                impl->inputNames.data(),
+                                                inputTensors.data(),
+                                                inputTensors.size(),
+                                                impl->outputNames.data(),
+                                                impl->outputNames.size());
+
+        const float* outData = outputTensors[0].GetTensorData<float>();
+        for (int c = 0; c < ch; ++c)
+            for (int i = 0; i < blockN; ++i)
+                buffer.setSample(c, offset + i, outData[c * blockN + i]);
+
+        if (profileConditioned && outputTensors.size() > 1)
+        {
+            const float* stateOut = outputTensors[1].GetTensorData<float>();
+            stateL = stateOut[0];
+            stateR = stateOut[1];
+        }
     }
 #else
     StnGridModel grid;
@@ -208,6 +219,7 @@ void OnnxStnRunner::process(juce::AudioBuffer<float>& buffer, const CassetteProf
     grid.process(buffer, profile, sampleRate);
     juce::ignoreUnused(profile);
 #endif
+    juce::ignoreUnused(sampleRate);
 }
 
 }

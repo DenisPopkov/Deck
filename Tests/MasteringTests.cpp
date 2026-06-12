@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include "../Source/project/MixtapeProject.h"
 #include "../Source/project/FolderMixBuilder.h"
+#include "../Source/project/MixtapeEditController.h"
 #include "../Source/dsp/CassetteMasteringPlanner.h"
 #include "../Source/export/PreflightTones.h"
 #include "../Source/dsp/filters/BiquadFilter.h"
@@ -331,6 +332,62 @@ static void testFolderMixSplitsAcrossTwoSides(TestContext& ctx)
                                    - (1.0 * 10.0 * 60.0);
     ctx.expectTrue(imbalance < greedyImbalance - 60.0,
                    "split should balance sides instead of maxing side A");
+}
+
+static void testAnalyzeLayoutRespectsManualSplit(TestContext& ctx)
+{
+    FolderScanResult scan;
+    scan.success = true;
+    scan.gapBetweenTracksSec = 2.0;
+
+    for (int i = 0; i < 4; ++i)
+    {
+        FolderTrackInfo t;
+        t.durationSec = 12.0 * 60.0;
+        scan.tracks.push_back(t);
+    }
+
+    scan.totalDurationSec = 4.0 * 12.0 * 60.0 + 3.0 * scan.gapBetweenTracksSec;
+
+    const auto tape = tapeLengthSpecForPreset(TapeLengthPreset::C90, 45.0);
+    const auto autoReport = FolderMixBuilder::analyzeFit(scan, tape);
+    const int manualSplit = 2;
+    const auto manualReport = FolderMixBuilder::analyzeLayout(scan, manualSplit, tape);
+
+    ctx.expectTrue(manualReport.split.sideAEndIndex == manualSplit, "manual split index preserved");
+    ctx.expectTrue(manualReport.sideATrackCount == manualSplit, "side A track count follows manual split");
+    ctx.expectTrue(manualReport.sideBTrackCount == scan.tracks.size() - static_cast<size_t>(manualSplit),
+                   "side B track count follows manual split");
+    ctx.expectTrue(manualReport.split.sideADurationSec != autoReport.split.sideADurationSec
+                       || manualReport.split.sideBDurationSec != autoReport.split.sideBDurationSec,
+                   "manual layout should differ from auto split when index differs");
+}
+
+static void testMixtapeEditorDeleteRecalculatesFit(TestContext& ctx)
+{
+    FolderScanResult scan;
+    scan.success = true;
+    scan.gapBetweenTracksSec = 2.0;
+
+    for (int i = 0; i < 4; ++i)
+    {
+        FolderTrackInfo t;
+        t.durationSec = 10.0 * 60.0;
+        scan.tracks.push_back(t);
+    }
+
+    scan.totalDurationSec = 4.0 * 10.0 * 60.0 + 3.0 * scan.gapBetweenTracksSec;
+    const auto tape = tapeLengthSpecForPreset(TapeLengthPreset::C90, 45.0);
+    const auto fit = FolderMixBuilder::analyzeFit(scan, tape);
+
+    MixtapeEditController editor;
+    editor.loadFromScan(scan, fit);
+    ctx.expectTrue(editor.canPrepare(tape), "initial layout should be prepare-ready");
+
+    editor.deleteTrack(0, 0);
+    const auto after = editor.computeFit(tape);
+    ctx.expectTrue(after.trackCount == 3, "delete should reduce track count");
+    ctx.expectTrue(after.requiredSec < fit.requiredSec, "delete should reduce required duration");
 }
 
 static void testMultiCassetteSplitWhenAlbumExceedsOneTape(TestContext& ctx)
@@ -791,6 +848,8 @@ int main()
     testCheapPortableLouderCapThanHighEndDeck(ctx);
     testMixtapeSideLengthValidation(ctx);
     testFolderMixSplitsAcrossTwoSides(ctx);
+    testAnalyzeLayoutRespectsManualSplit(ctx);
+    testMixtapeEditorDeleteRecalculatesFit(ctx);
     testMultiCassetteSplitWhenAlbumExceedsOneTape(ctx);
     testAutoMasteringPlannerPicksMinimalForQuietSource(ctx);
     testAutoMasteringPlannerPicksTapePrepForHotBrightSource(ctx);

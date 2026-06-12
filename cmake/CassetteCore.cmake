@@ -18,6 +18,7 @@ set(CASSETTE_CORE_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/../Source/project/MixtapeProject.cpp
     ${CMAKE_CURRENT_LIST_DIR}/../Source/project/SideRenderer.cpp
     ${CMAKE_CURRENT_LIST_DIR}/../Source/project/FolderMixBuilder.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/../Source/project/MixtapeEditController.cpp
     ${CMAKE_CURRENT_LIST_DIR}/../Source/dsp/filters/BiquadFilter.cpp
     ${CMAKE_CURRENT_LIST_DIR}/../Source/dsp/stereo/MidSideProcessor.cpp
     ${CMAKE_CURRENT_LIST_DIR}/../Source/dsp/dynamics/DynamicEQ.cpp
@@ -47,6 +48,7 @@ function(cassette_configure_core_target target)
     )
     target_link_libraries(${target} PUBLIC
         juce::juce_core
+        juce::juce_data_structures
         juce::juce_audio_basics
         juce::juce_dsp
         juce::juce_audio_formats

@@ -330,6 +330,28 @@ std::vector<CassettePlan> FolderMixBuilder::computeMultiCassetteSplit(const Fold
 
 FolderFitReport FolderMixBuilder::analyzeFit(const FolderScanResult& scan, const TapeLengthSpec& tape)
 {
+    return analyzeLayout(scan, -1, tape);
+}
+
+double FolderMixBuilder::sideDurationSec(const std::vector<FolderTrackInfo>& tracks, double gapBetweenTracksSec)
+{
+    if (tracks.empty())
+        return 0.0;
+
+    double total = 0.0;
+    for (size_t i = 0; i < tracks.size(); ++i)
+    {
+        total += tracks[i].durationSec;
+        if (i + 1 < tracks.size())
+            total += gapBetweenTracksSec;
+    }
+    return total;
+}
+
+FolderFitReport FolderMixBuilder::analyzeLayout(const FolderScanResult& scan,
+                                                int sideAEndIndex,
+                                                const TapeLengthSpec& tape)
+{
     FolderFitReport report;
     report.tape = tape;
     report.trackCount = static_cast<int>(scan.tracks.size());
@@ -349,9 +371,25 @@ FolderFitReport FolderMixBuilder::analyzeFit(const FolderScanResult& scan, const
 
     report.cassettes = computeMultiCassetteSplit(scan, report.allowedSec);
     report.cassetteCount = static_cast<int>(report.cassettes.size());
-    report.split = computeSideSplit(scan, report.allowedSec);
+
+    if (sideAEndIndex < 0)
+        report.split = computeSideSplit(scan, report.allowedSec);
+    else
+    {
+        const int split = juce::jlimit(0, report.trackCount, sideAEndIndex);
+        report.split.sideAEndIndex = split;
+        report.split.sideADurationSec = durationRangeSec(scan, 0, split);
+        report.split.needsSideB = split < report.trackCount;
+        report.split.sideBDurationSec = durationRangeSec(scan, split, report.trackCount);
+    }
+
     report.sideATrackCount = report.split.sideAEndIndex;
     report.sideBTrackCount = report.trackCount - report.sideATrackCount;
+
+    const bool sideAFits = sideFitsCapacity(scan, report.split.sideADurationSec, report.allowedSec);
+    const bool sideBFits = !report.split.needsSideB
+                           || sideFitsCapacity(scan, report.split.sideBDurationSec, report.allowedSec);
+    report.fits = report.fits && sideAFits && sideBFits;
     return report;
 }
 
@@ -418,6 +456,55 @@ MixtapeProject FolderMixBuilder::buildCassetteProject(const FolderScanResult& sc
     }
 
     return project;
+}
+
+MixtapeProject FolderMixBuilder::buildProjectFromSides(const std::vector<FolderTrackInfo>& sideATracks,
+                                                       const std::vector<FolderTrackInfo>& sideBTracks,
+                                                       const juce::File& folder,
+                                                       double gapBetweenTracksSec,
+                                                       const juce::String& projectName,
+                                                       CassetteProfile profile,
+                                                       const MasteringOptions& mastering,
+                                                       double allowedSecPerSide)
+{
+    FolderScanResult scan;
+    scan.success = true;
+    scan.folder = folder;
+    scan.gapBetweenTracksSec = gapBetweenTracksSec;
+    scan.tracks.reserve(sideATracks.size() + sideBTracks.size());
+
+    for (const auto& t : sideATracks)
+        scan.tracks.push_back(t);
+    for (const auto& t : sideBTracks)
+        scan.tracks.push_back(t);
+
+    scan.totalDurationSec = 0.0;
+    for (size_t i = 0; i < scan.tracks.size(); ++i)
+    {
+        scan.totalDurationSec += scan.tracks[i].durationSec;
+        if (i + 1 < scan.tracks.size())
+            scan.totalDurationSec += gapBetweenTracksSec;
+    }
+
+    CassettePlan plan;
+    plan.cassetteNumber = 1;
+    plan.sideAStartTrack = 0;
+    plan.sideAEndTrack = static_cast<int>(sideATracks.size());
+    plan.sideADurationSec = sideDurationSec(sideATracks, gapBetweenTracksSec);
+    plan.hasSideB = !sideBTracks.empty();
+    if (plan.hasSideB)
+    {
+        plan.sideBStartTrack = plan.sideAEndTrack;
+        plan.sideBEndTrack = static_cast<int>(scan.tracks.size());
+        plan.sideBDurationSec = sideDurationSec(sideBTracks, gapBetweenTracksSec);
+    }
+
+    return buildCassetteProject(scan,
+                                plan,
+                                projectName,
+                                std::move(profile),
+                                mastering,
+                                allowedSecPerSide);
 }
 
 MixtapeProject FolderMixBuilder::buildSplitProject(const FolderScanResult& scan,

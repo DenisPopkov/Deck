@@ -15,6 +15,7 @@ void WizardStepStrip::setStepDone(WizardPhase phase, bool done)
     switch (phase)
     {
         case WizardPhase::AddMusic: musicDone = done; break;
+        case WizardPhase::EditTracks: editDone = done; break;
         case WizardPhase::Preparing: prepareDone = done; break;
         case WizardPhase::ReadyToExport: exportDone = done; break;
     }
@@ -25,9 +26,12 @@ void WizardStepStrip::paint(juce::Graphics& g)
 {
     using namespace ui;
 
-    const juce::String titles[] = { "Add music", "Prepare", "Export" };
-    const bool done[] = { musicDone, prepareDone, exportDone };
-    const WizardPhase phases[] = { WizardPhase::AddMusic, WizardPhase::Preparing, WizardPhase::ReadyToExport };
+    const juce::String titles[] = { "Add music", "Edit tracks", "Prepare", "Export" };
+    const bool done[] = { musicDone, editDone, prepareDone, exportDone };
+    const WizardPhase phases[] = { WizardPhase::AddMusic,
+                                   WizardPhase::EditTracks,
+                                   WizardPhase::Preparing,
+                                   WizardPhase::ReadyToExport };
 
     auto area = getLocalBounds().reduced(12, 4);
     const int lineY = area.getCentreY();
@@ -35,7 +39,7 @@ void WizardStepStrip::paint(juce::Graphics& g)
     g.setColour(Theme::borderLight());
     g.drawHorizontalLine(lineY, static_cast<float>(area.getX() + 28), static_cast<float>(area.getRight() - 28));
 
-    const int n = 3;
+    const int n = 4;
     const int cellW = area.getWidth() / n;
 
     for (int i = 0; i < n; ++i)

@@ -11,6 +11,9 @@
 #include "TapeTimelineView.h"
 #include "TapeParameterPanel.h"
 #include "StatusBar.h"
+#include "../TrackListEditor.h"
+#include "../../project/MixtapeEditController.h"
+#include "../../project/FolderMixBuilder.h"
 
 namespace cassette
 {
@@ -45,12 +48,18 @@ private:
     void saveProject();
     void rebuildPreviewForActiveSide();
     void renderSide(bool sideB);
+    void scanFolderForEditor(const juce::File& folder);
+    void syncProjectFromEditor();
 
     MixtapeProject project;
     juce::File projectFile;
+    MixtapeEditController folderEditor;
+    TapeLengthSpec folderTape { "C90", 45.0 };
+    bool folderEditMode = false;
 
     ProjectSidebar sidebar;
     TransportBar transportBar;
+    TrackListEditor trackListEditor;
     TapeTimelineView timeline;
     TapeParameterPanel params;
     StatusBar statusBar;

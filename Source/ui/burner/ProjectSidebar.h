@@ -13,6 +13,7 @@ class ProjectSidebar : public juce::Component,
 public:
     std::function<void()> onNewProject;
     std::function<void()> onImportAudio;
+    std::function<void()> onImportFolder;
     std::function<void(int)> onProjectSelected;
 
     ProjectSidebar();
@@ -29,6 +30,7 @@ private:
 
     juce::TextButton newBtn { "+ New Project" };
     juce::TextButton importBtn { "Import Audio" };
+    juce::TextButton importFolderBtn { "Import Folder" };
     juce::ListBox projectList;
     juce::StringArray projects;
 };

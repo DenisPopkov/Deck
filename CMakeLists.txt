@@ -77,6 +77,8 @@ target_sources(CassetteAutoMaster PRIVATE
     Source/ui/CompareWaveformDisplay.cpp
     Source/ui/look/CassetteLook.cpp
     Source/ui/WizardStepStrip.cpp
+    Source/ui/TrackListEditor.cpp
+    Source/ui/ConfirmDialog.cpp
     Source/ui/DropHeroPanel.cpp
     Source/ui/MoreOptionsPanel.cpp
     Source/threading/AnalysisWorker.cpp
@@ -210,6 +212,7 @@ if(CASSETTE_BUILD_BURNER)
         Source/ui/burner/StatusBar.cpp
         Source/ui/burner/AnalogVuMeter.cpp
         Source/ui/look/CassetteBurnerLook.cpp
+        Source/ui/TrackListEditor.cpp
         Source/threading/AnalysisWorker.cpp
         Source/util/AppLog.cpp
     )

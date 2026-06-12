@@ -1,4 +1,5 @@
 #include "MainComponent.h"
+#include "ConfirmDialog.h"
 #include "UiTheme.h"
 #include <cmath>
 #include <memory>
@@ -13,129 +14,6 @@
 namespace cassette
 {
 
-namespace
-{
-
-class ChangeTapeTypeDialog : public juce::Component
-{
-public:
-    std::function<void(int)> onResult;
-
-    ChangeTapeTypeDialog()
-    {
-        using namespace ui;
-
-        addAndMakeVisible(titleLabel);
-        Theme::applyLabel(titleLabel, Theme::sectionFont(), Theme::textPrimary(), juce::Justification::centred);
-        titleLabel.setText("Change tape type", juce::dontSendNotification);
-
-        addAndMakeVisible(messageLabel);
-        Theme::applyLabel(messageLabel, Theme::bodyFont(), Theme::textSecondary(), juce::Justification::centred);
-        messageLabel.setText("Changing the tape type discards the prepared result.\n"
-                             "You will need to run Prepare again.",
-                             juce::dontSendNotification);
-
-        addAndMakeVisible(changeButton);
-        addAndMakeVisible(keepButton);
-        Theme::styleNeutralButton(changeButton);
-        Theme::styleRecButton(keepButton);
-
-        changeButton.onClick = [this] { finish(1); };
-        keepButton.onClick = [this] { finish(0); };
-
-        setSize(380, 168);
-    }
-
-    void paint(juce::Graphics& g) override
-    {
-        ui::Theme::drawCard(g, getLocalBounds(), juce::String());
-    }
-
-    void resized() override
-    {
-        constexpr int padH = 24;
-        constexpr int padV = 20;
-        auto r = getLocalBounds().reduced(padH, padV);
-
-        titleLabel.setBounds(r.removeFromTop(20));
-        r.removeFromTop(12);
-        messageLabel.setBounds(r.removeFromTop(44));
-        r.removeFromTop(16);
-
-        auto row = r.removeFromTop(36);
-        const int gap = 10;
-        const int buttonW = (row.getWidth() - gap) / 2;
-        changeButton.setBounds(row.removeFromLeft(buttonW));
-        row.removeFromLeft(gap);
-        keepButton.setBounds(row);
-    }
-
-    bool keyPressed(const juce::KeyPress& key) override
-    {
-        if (key == juce::KeyPress::escapeKey)
-        {
-            finish(0);
-            return true;
-        }
-        if (key == juce::KeyPress::returnKey)
-        {
-            finish(0);
-            return true;
-        }
-        return juce::Component::keyPressed(key);
-    }
-
-private:
-    juce::Label titleLabel;
-    juce::Label messageLabel;
-    juce::TextButton changeButton { "Change type" };
-    juce::TextButton keepButton { "Keep current" };
-
-    void finish(int result)
-    {
-        if (onResult)
-            onResult(result);
-    }
-};
-
-class ChangeTapeTypeModal : public juce::Component
-{
-public:
-    std::function<void(int)> onResult;
-
-    ChangeTapeTypeModal()
-    {
-        dialog.onResult = [this](int result) {
-            if (onResult)
-                onResult(result);
-            exitModalState(result);
-        };
-
-        addAndMakeVisible(dialog);
-        setWantsKeyboardFocus(true);
-    }
-
-    void paint(juce::Graphics& g) override
-    {
-        g.fillAll(juce::Colours::black.withAlpha(0.55f));
-    }
-
-    void resized() override
-    {
-        dialog.setBounds(getLocalBounds().withSizeKeepingCentre(dialog.getWidth(), dialog.getHeight()));
-    }
-
-    bool keyPressed(const juce::KeyPress& key) override
-    {
-        return dialog.keyPressed(key) || juce::Component::keyPressed(key);
-    }
-
-private:
-    ChangeTapeTypeDialog dialog;
-};
-
-}
-
 MainComponent::MainComponent()
 {
     using namespace ui;
@@ -147,6 +25,7 @@ MainComponent::MainComponent()
                      static_cast<juce::Component*>(&wizardSteps),
                      static_cast<juce::Component*>(&readySummary),
                      static_cast<juce::Component*>(&compareWaveform),
+                     static_cast<juce::Component*>(&trackListEditor),
                      static_cast<juce::Component*>(&newButton),
                      static_cast<juce::Component*>(&startButton),
                      static_cast<juce::Component*>(&exportButton),
@@ -164,7 +43,7 @@ MainComponent::MainComponent()
         refreshFolderFitLabel();
         if (mixtapeModeActive && hasProcessed)
             invalidatePreparedOutput();
-        resized();
+        syncLayout();
     };
     tapeSetupPanel.onChangeTapeTypeRequested = [this] { promptChangeTapeType(); };
 
@@ -211,6 +90,37 @@ MainComponent::MainComponent()
 
     mixtapePanel.onFolderSelected = [this](const juce::File& folder) { scanMixFolder(folder); };
 
+    trackListEditor.setVisible(false);
+    trackListEditor.onLayoutChanged = [this] {
+        if (mixtapeModeActive && hasProcessed)
+            invalidatePreparedOutput();
+        refreshFolderFitLabel();
+        syncLayout();
+    };
+    trackListEditor.onRebalanceRequested = [this] {
+        if (mixtapeEditor.hasManualEdits())
+        {
+            ui::ConfirmDialogOptions options;
+            options.title = "Rebalance sides";
+            options.message = "Replace your track layout with the automatic split?";
+            options.confirmLabel = "Rebalance";
+            options.cancelLabel = "Cancel";
+            ui::showConfirmDialog(this, options, [this](bool confirmed) {
+                if (!confirmed)
+                    return;
+                mixtapeEditor.rebalance(tapeSetup().getTapeLengthSpec());
+                trackListEditor.refresh();
+                refreshFolderFitLabel();
+                syncLayout();
+            });
+            return;
+        }
+        mixtapeEditor.rebalance(tapeSetup().getTapeLengthSpec());
+        trackListEditor.refresh();
+        refreshFolderFitLabel();
+        syncLayout();
+    };
+
     previewPlayer.setSource(&previewEngine);
     previewEngine.setMonitoringEnabled(false);
     previewDeviceManager.initialiseWithDefaultDevices(0, 2);
@@ -220,7 +130,7 @@ MainComponent::MainComponent()
     startTimerHz(12);
     setWantsKeyboardFocus(true);
     setSize(1180, 820);
-    updateWizardState();
+    syncLayout();
 }
 
 MainComponent::~MainComponent()
@@ -270,20 +180,27 @@ void MainComponent::syncTransportButtonStyles()
 void MainComponent::updateWizardState()
 {
     wizardSteps.setStepDone(WizardPhase::AddMusic, hasSource);
+    wizardSteps.setStepDone(WizardPhase::EditTracks, hasSource);
     wizardSteps.setStepDone(WizardPhase::Preparing, hasProcessed);
     wizardSteps.setStepDone(WizardPhase::ReadyToExport, exportButton.isEnabled());
 
     const bool busy = isProcessing.load();
+    const bool folderBusy = mixtapePanelBusy;
+    const bool showTrackEditor = mixtapeModeActive && (hasSource || folderBusy) && !hasProcessed && !busy;
 
-    if (!hasSource)
+    if (!hasSource && !folderBusy)
         wizardSteps.setPhase(WizardPhase::AddMusic);
+    else if (showTrackEditor || (folderBusy && mixtapeModeActive && !hasProcessed))
+        wizardSteps.setPhase(WizardPhase::EditTracks);
     else if (!hasProcessed)
         wizardSteps.setPhase(WizardPhase::Preparing);
     else
         wizardSteps.setPhase(WizardPhase::ReadyToExport);
 
-    dropHero.setVisible(!hasSource);
-    compareWaveform.setVisible(hasSource);
+    dropHero.setVisible(!hasSource && !folderBusy);
+    trackListEditor.setVisible(showTrackEditor);
+    trackListEditor.setLoading(folderBusy && !hasSource);
+    compareWaveform.setVisible(hasSource && !showTrackEditor);
     tapeSetupPanel.setMixtapeMode(mixtapeModeActive);
     tapeSetupPanel.setCompactToolbarMode(!mixtapeModeActive);
 
@@ -296,6 +213,7 @@ void MainComponent::updateWizardState()
     startButton.setVisible(!hasProcessed || busy);
     startButton.setEnabled(hasSource && !busy && !hasProcessed
                            && (!mixtapeModeActive || folderFitOk));
+    trackListEditor.setInterceptsMouseClicks(showTrackEditor, showTrackEditor);
     startButton.setButtonText("Prepare");
     newButton.setEnabled((hasSource || hasProcessed) && !busy);
     exportButton.setEnabled(!busy && hasProcessed && loadedAudio.has_value());
@@ -461,7 +379,10 @@ void MainComponent::resized()
     statusRow.removeFromRight(8);
     status.setBounds(statusRow);
 
-    compareWaveform.setBounds(centre.reduced(8, 4));
+    if (trackListEditor.isVisible())
+        trackListEditor.setBounds(centre.reduced(8, 4));
+    else
+        compareWaveform.setBounds(centre.reduced(8, 4));
 }
 
 bool MainComponent::keyPressed(const juce::KeyPress& key)
@@ -490,6 +411,8 @@ bool MainComponent::keyPressed(const juce::KeyPress& key)
             exportButton.triggerClick();
         return true;
     }
+    if (trackListEditor.isVisible() && trackListEditor.keyPressed(key))
+        return true;
 
     if (auto* window = dynamic_cast<juce::DocumentWindow*>(getTopLevelComponent()))
     {
@@ -522,6 +445,12 @@ void MainComponent::setProgress(double value)
     repaint(progressBounds);
 }
 
+void MainComponent::syncLayout()
+{
+    updateWizardState();
+    resized();
+}
+
 void MainComponent::setUiProcessing(bool processing)
 {
     isProcessing.store(processing);
@@ -532,8 +461,7 @@ void MainComponent::setUiProcessing(bool processing)
     }
     if (!processing)
         refreshFolderFitLabel();
-    updateWizardState();
-    resized();
+    syncLayout();
     repaint(progressBounds);
 }
 
@@ -575,6 +503,7 @@ void MainComponent::resetSession()
     hasSideB = false;
     mixtapeCassetteCount = 1;
     folderScan.reset();
+    mixtapeEditor.clear();
     loadedAudio.reset();
     sourceAudio.reset();
     mixtapeReferenceAudio.reset();
@@ -600,11 +529,11 @@ void MainComponent::resetSession()
     tapeSetupPanel.setTapeFitSummary({}, true);
     folderFitOk = true;
     mixtapePanel.setFitReport("", true);
+    mixtapePanelBusy = false;
     mixtapePanel.setBusy(false);
 
     setStatus({}, ui::Theme::textSecondary());
-    resized();
-    updateWizardState();
+    syncLayout();
 }
 
 void MainComponent::invalidatePreparedOutput()
@@ -624,8 +553,7 @@ void MainComponent::invalidatePreparedOutput()
     readySummary.setVisible(false);
 
     setStatus("Choose tape type, then Prepare", ui::Theme::textSecondary());
-    updateWizardState();
-    resized();
+    syncLayout();
 }
 
 void MainComponent::promptChangeTapeType()
@@ -633,17 +561,17 @@ void MainComponent::promptChangeTapeType()
     if (!hasProcessed || isProcessing.load())
         return;
 
-    auto* modal = new ChangeTapeTypeModal();
-    modal->onResult = [this](int result) {
-        if (result == 1)
-            invalidatePreparedOutput();
-    };
+    ui::ConfirmDialogOptions options;
+    options.title = "Change tape type";
+    options.message = "Changing the tape type discards the prepared result.\n"
+                      "You will need to run Prepare again.";
+    options.confirmLabel = "Change type";
+    options.cancelLabel = "Keep current";
 
-    modal->setBounds(getLocalBounds());
-    addAndMakeVisible(modal);
-    modal->toFront(true);
-    modal->grabKeyboardFocus();
-    modal->enterModalState(true, nullptr, true);
+    ui::showConfirmDialog(this, options, [this](bool confirmed) {
+        if (confirmed)
+            invalidatePreparedOutput();
+    });
 }
 
 void MainComponent::pickFolder()
@@ -678,14 +606,21 @@ void MainComponent::refreshFolderFitLabel()
         return;
     }
 
-    const auto report = FolderMixBuilder::analyzeFit(*folderScan, tapeSetup().getTapeLengthSpec());
-    folderFitOk = report.fits;
-    mixtapePanel.setFitReport(report.summary(), report.fits);
-    mixtapePanel.setBuildEnabled(report.fits && !isProcessing.load());
-    tapeSetupPanel.setTapeFitSummary(report.summary(), report.fits);
+    const auto tape = tapeSetup().getTapeLengthSpec();
+    const bool editorActive = !mixtapeEditor.sideA().empty() || !mixtapeEditor.sideB().empty();
+    const auto report = editorActive
+                            ? (mixtapeEditor.getCassetteCount() > 1 ? mixtapeEditor.computeFullFit(tape)
+                                                                    : mixtapeEditor.computeFit(tape))
+                            : FolderMixBuilder::analyzeFit(*folderScan, tape);
+
+    folderFitOk = editorActive ? mixtapeEditor.canPrepare(tape) : report.fits;
+    mixtapePanel.setFitReport(report.summary(), folderFitOk);
+    mixtapePanel.setBuildEnabled(folderFitOk && !isProcessing.load());
+    tapeSetupPanel.setTapeFitSummary(report.summary(), folderFitOk);
+    trackListEditor.setTapeSpec(tape);
 
     if (mixtapeModeActive)
-        setStatus(report.summary(), report.fits ? ui::Theme::textPrimary() : ui::Theme::warnAmber());
+        setStatus(report.summary(), folderFitOk ? ui::Theme::textPrimary() : ui::Theme::warnAmber());
 }
 
 void MainComponent::scanMixFolder(const juce::File& folder)
@@ -695,20 +630,24 @@ void MainComponent::scanMixFolder(const juce::File& folder)
     folderScan.reset();
     hasProcessed = false;
     hasSource = false;
+    mixtapePanelBusy = true;
     mixtapePanel.setBusy(true);
     mixtapeModeActive = true;
     tapeSetupPanel.setMixtapeMode(true);
     setStatus("Scanning " + folder.getFileName() + "...", ui::Theme::warnAmber());
+    syncLayout();
 
     worker.enqueue([this, folder]() {
         const auto scan = FolderMixBuilder::scanFolder(folder);
         juce::MessageManager::callAsync([this, scan, folder]() {
+            mixtapePanelBusy = false;
             mixtapePanel.setBusy(false);
             if (!scan.success)
             {
                 log("UI: folder scan failed - " + scan.error);
                 mixtapePanel.setFitReport(scan.error, false);
                 setStatus(scan.error, ui::Theme::failRed());
+                syncLayout();
                 return;
             }
             folderScan = scan;
@@ -717,12 +656,16 @@ void MainComponent::scanMixFolder(const juce::File& folder)
             log("UI: folder scan OK - " + juce::String(scan.tracks.size()) + " tracks");
             sessionLabel.setText(folder.getFileName() + "\n" + juce::String(scan.tracks.size()) + " tracks",
                                  juce::dontSendNotification);
-            refreshFolderFitLabel();
-            resized();
+
             const auto fitReport = FolderMixBuilder::analyzeFit(scan, tapeSetup().getTapeLengthSpec());
-            setStatus(fitReport.summary(),
-                      fitReport.fits ? ui::Theme::textPrimary() : ui::Theme::warnAmber());
-            updateWizardState();
+            mixtapeEditor.loadFromScan(scan, fitReport);
+            trackListEditor.setController(&mixtapeEditor);
+            trackListEditor.setLoading(false);
+            refreshFolderFitLabel();
+            trackListEditor.refresh();
+            setStatus("Edit track order, then Prepare.",
+                      ui::Theme::textPrimary());
+            syncLayout();
         });
     });
 }
@@ -765,8 +708,7 @@ void MainComponent::loadAudioFile(const juce::File& file)
             updateWaveformInfo(features, nullptr);
 
             setStatus("Added " + file.getFileName(), ui::Theme::okGreen());
-            resized();
-            updateWizardState();
+            syncLayout();
         });
     });
 }
@@ -827,8 +769,7 @@ void MainComponent::startProcessing()
             finishProcessing(true, {});
             exportButton.setEnabled(true);
             updateReadySummary();
-            resized();
-            updateWizardState();
+            syncLayout();
         });
     });
 }
@@ -848,9 +789,9 @@ void MainComponent::startFolderMixBuild()
     }
 
     const auto tape = tapeSetup().getTapeLengthSpec();
-    const auto fit = FolderMixBuilder::analyzeFit(*folderScan, tape);
-    if (!fit.fits)
+    if (!mixtapeEditor.canPrepare(tape))
     {
+        const auto fit = mixtapeEditor.computeFit(tape);
         setStatus(fit.summary(), ui::Theme::warnAmber());
         return;
     }
@@ -861,21 +802,39 @@ void MainComponent::startFolderMixBuild()
     auto options = currentMasteringOptions();
     options.skipQualityCompare = true;
 
-    const auto scanCopy = *folderScan;
+    mixtapeEditor.saveActiveCassetteLayout();
+    const auto scanCopy = mixtapeEditor.mergedFullScan();
+    const auto fit = mixtapeEditor.computeFullFit(tape);
+    const int cassetteCount = mixtapeEditor.getCassetteCount();
+    const auto gapSec = mixtapeEditor.gapBetweenTracksSec();
+    std::vector<MixtapeEditController::LayoutSnapshot> cassetteLayouts;
+    cassetteLayouts.reserve(static_cast<size_t>(cassetteCount));
+    for (int i = 0; i < cassetteCount; ++i)
+        cassetteLayouts.push_back(mixtapeEditor.layoutForCassette(i));
     const auto projectName = mixtapePanel.currentFolder().getFileName();
     const juce::File outFolder = mixtapePanel.currentFolder();
     const auto allowedSec = tape.minutesPerSide * 60.0;
 
     setUiProcessing(true);
     wizardSteps.setPhase(WizardPhase::Preparing);
-    setStatus(fit.cassetteCount > 1 ? "Preparing " + juce::String(fit.cassetteCount) + " cassettes..."
-                                    : "Preparing Side A and Side B...",
+    setStatus(cassetteCount > 1 ? "Preparing " + juce::String(cassetteCount) + " cassettes..."
+                                : "Preparing Side A and Side B...",
               ui::Theme::warnAmber());
 
     log("UI: Build mixtape started - " + juce::String(scanCopy.tracks.size()) + " tracks, "
-        + juce::String(fit.cassetteCount) + " cassette(s), out=" + outFolder.getFullPathName());
+        + juce::String(cassetteCount) + " cassette(s), out=" + outFolder.getFullPathName());
 
-    worker.enqueue([this, scanCopy, profile, options, projectName, outFolder, allowedSec, fit]() {
+    worker.enqueue([this,
+                    scanCopy,
+                    cassetteLayouts,
+                    gapSec,
+                    profile,
+                    options,
+                    projectName,
+                    outFolder,
+                    allowedSec,
+                    fit,
+                    cassetteCount]() {
         try
         {
             ScopedTimer buildTimer("folder-build", projectName + " (" + juce::String(scanCopy.tracks.size()) + " tracks)");
@@ -897,27 +856,31 @@ void MainComponent::startFolderMixBuild()
             std::shared_ptr<RenderResult> previewB;
             juce::File previewSideAFile;
             juce::File previewSideBFile;
-            const CassettePlan* previewPlan = fit.cassettes.empty() ? nullptr : &fit.cassettes.front();
+            CassettePlan previewPlan;
 
-            for (const auto& cassettePlan : fit.cassettes)
+            int trackOffset = 0;
+            for (int cassetteIdx = 0; cassetteIdx < cassetteCount && workerError.isEmpty(); ++cassetteIdx)
             {
-                log("folder-build: cassette " + juce::String(cassettePlan.cassetteNumber) + "/"
-                    + juce::String(fit.cassetteCount));
+                const auto& layout = cassetteLayouts[static_cast<size_t>(cassetteIdx)];
+                const int sideATracks = static_cast<int>(layout.sideA.size());
+                const int sideBTracks = static_cast<int>(layout.sideB.size());
+                const int cassetteTrackCount = sideATracks + sideBTracks;
 
-                auto project = FolderMixBuilder::buildCassetteProject(scanCopy,
-                                                                    cassettePlan,
-                                                                    projectName,
-                                                                    profile,
-                                                                    options,
-                                                                    allowedSec);
+                auto project = FolderMixBuilder::buildProjectFromSides(layout.sideA,
+                                                                       layout.sideB,
+                                                                       outFolder,
+                                                                       gapSec,
+                                                                       projectName,
+                                                                       profile,
+                                                                       options,
+                                                                       allowedSec);
 
-                const juce::String cassetteLabel = fit.cassetteCount > 1
-                                                       ? projectName + " Cassette "
-                                                             + juce::String(cassettePlan.cassetteNumber)
+                const juce::String cassetteLabel = cassetteCount > 1
+                                                       ? projectName + " Cassette " + juce::String(cassetteIdx + 1)
                                                        : projectName;
 
-                const auto sideAProgress = [&, start = cassettePlan.sideAStartTrack](int index, int, const juce::String& title) {
-                    trackProgress(start + index, totalTracks, title);
+                const auto sideAProgress = [&, start = trackOffset](int index, int, const juce::String& title) {
+                    trackProgress(start + index + 1, totalTracks, title);
                 };
 
                 const bool captureReference = previewA == nullptr;
@@ -939,12 +902,15 @@ void MainComponent::startFolderMixBuild()
                 {
                     previewA = std::make_shared<RenderResult>(std::move(renderedA));
                     previewSideAFile = sideAFile;
+                    previewPlan.sideAStartTrack = 0;
+                    previewPlan.sideAEndTrack = sideATracks;
+                    previewPlan.sideADurationSec = FolderMixBuilder::sideDurationSec(layout.sideA, gapSec);
                 }
 
-                if (cassettePlan.hasSideB)
+                if (sideBTracks > 0)
                 {
-                    const auto sideBProgress = [&, start = cassettePlan.sideBStartTrack](int index, int, const juce::String& title) {
-                        trackProgress(start + index, totalTracks, title);
+                    const auto sideBProgress = [&, start = trackOffset + sideATracks](int index, int, const juce::String& title) {
+                        trackProgress(start + index + 1, totalTracks, title);
                     };
 
                     auto renderedB = SideRenderer::renderSide(project, true, sampleRate, false, sideBProgress);
@@ -961,12 +927,18 @@ void MainComponent::startFolderMixBuild()
                         break;
                     }
 
-                    if (previewB == nullptr && fit.cassetteCount == 1)
+                    if (previewB == nullptr && cassetteCount == 1)
                     {
                         previewB = std::make_shared<RenderResult>(std::move(renderedB));
                         previewSideBFile = sideBFile;
+                        previewPlan.hasSideB = true;
+                        previewPlan.sideBStartTrack = sideATracks;
+                        previewPlan.sideBEndTrack = cassetteTrackCount;
+                        previewPlan.sideBDurationSec = FolderMixBuilder::sideDurationSec(layout.sideB, gapSec);
                     }
                 }
+
+                trackOffset += cassetteTrackCount;
             }
 
             juce::MessageManager::callAsync([this]() { setProgress(0.99); });
@@ -1033,8 +1005,6 @@ void MainComponent::startFolderMixBuild()
                                                  : "Side A/B WAV files saved next to your music";
                 setProgress(1.0);
                 finishProcessing(true, doneMsg);
-                resized();
-                updateWizardState();
             });
         }
         catch (const std::exception& e)
