@@ -94,6 +94,8 @@ MainComponent::MainComponent()
     trackListEditor.onLayoutChanged = [this] {
         if (mixtapeModeActive && hasProcessed)
             invalidatePreparedOutput();
+        if (folderScan.has_value() && folderScan->success)
+            mixtapeEditor.syncCassettePlan(tapeSetup().getTapeLengthSpec());
         refreshFolderFitLabel();
         syncLayout();
     };
@@ -802,7 +804,7 @@ void MainComponent::startFolderMixBuild()
     auto options = currentMasteringOptions();
     options.skipQualityCompare = true;
 
-    mixtapeEditor.saveActiveCassetteLayout();
+    mixtapeEditor.syncCassettePlan(tape);
     const auto scanCopy = mixtapeEditor.mergedFullScan();
     const auto fit = mixtapeEditor.computeFullFit(tape);
     const int cassetteCount = mixtapeEditor.getCassetteCount();
@@ -953,7 +955,8 @@ void MainComponent::startFolderMixBuild()
                                              previewSideAFile,
                                              previewSideBFile,
                                              workerError,
-                                             profile]() mutable {
+                                             profile,
+                                             cassetteCount]() mutable {
                 if (workerError.isNotEmpty())
                 {
                     finishProcessing(false, workerError);
@@ -966,7 +969,7 @@ void MainComponent::startFolderMixBuild()
                     return;
                 }
 
-                mixtapeCassetteCount = fit.cassetteCount;
+                mixtapeCassetteCount = cassetteCount;
 
                 LoadedAudio sideA;
                 sideA.buffer = std::move(previewA->buffer);
@@ -1000,8 +1003,8 @@ void MainComponent::startFolderMixBuild()
                 exportButton.setEnabled(true);
 
                 updateReadySummary();
-                const juce::String doneMsg = fit.cassetteCount > 1
-                                                 ? juce::String(fit.cassetteCount) + " cassettes saved next to your music"
+                const juce::String doneMsg = cassetteCount > 1
+                                                 ? juce::String(cassetteCount) + " cassettes saved next to your music"
                                                  : "Side A/B WAV files saved next to your music";
                 setProgress(1.0);
                 finishProcessing(true, doneMsg);

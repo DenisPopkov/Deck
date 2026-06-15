@@ -53,6 +53,8 @@ public:
     bool moveRowDown(int sideIndex, int row);
     bool deleteTrack(int sideIndex, int row);
     void rebalance(const TapeLengthSpec& tape);
+    /** Recompute cassette count from the current track list (respects deletions). */
+    void syncCassettePlan(const TapeLengthSpec& tape);
 
     juce::UndoManager& getUndoManager() { return undoManager; }
     bool hasManualEdits() const { return manualEdits; }

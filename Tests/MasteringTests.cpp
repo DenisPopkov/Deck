@@ -390,6 +390,39 @@ static void testMixtapeEditorDeleteRecalculatesFit(TestContext& ctx)
     ctx.expectTrue(after.requiredSec < fit.requiredSec, "delete should reduce required duration");
 }
 
+static void testMixtapeEditorSyncConsolidatesToOneCassette(TestContext& ctx)
+{
+    FolderScanResult scan;
+    scan.success = true;
+    scan.gapBetweenTracksSec = 2.0;
+
+    for (int i = 0; i < 7; ++i)
+    {
+        FolderTrackInfo t;
+        t.displayName = "Track " + juce::String(i + 1);
+        t.durationSec = 20.0 * 60.0;
+        scan.tracks.push_back(t);
+    }
+
+    scan.totalDurationSec = 7.0 * 20.0 * 60.0 + 6.0 * scan.gapBetweenTracksSec;
+    const auto tape = tapeLengthSpecForPreset(TapeLengthPreset::C120, 60.0);
+    const auto fit = FolderMixBuilder::analyzeFit(scan, tape);
+    ctx.expectTrue(fit.cassetteCount == 2, "140+ min should require two cassettes");
+
+    MixtapeEditController editor;
+    editor.loadFromScan(scan, fit);
+    ctx.expectTrue(editor.getCassetteCount() == 2, "editor should start with two cassettes");
+
+    editor.setActiveCassetteIndex(0);
+    ctx.expectTrue(editor.deleteTrack(0, 0), "delete from first cassette");
+    ctx.expectTrue(editor.deleteTrack(0, 0), "delete second track from first cassette");
+    editor.syncCassettePlan(tape);
+
+    ctx.expectTrue(editor.getCassetteCount() == 1, "removed tracks should consolidate to one cassette");
+    ctx.expectTrue(editor.mergedFullScan().tracks.size() == 5, "deleted tracks should stay removed");
+    ctx.expectTrue(editor.canPrepare(tape), "consolidated layout should be prepare-ready");
+}
+
 static void testMultiCassetteSplitWhenAlbumExceedsOneTape(TestContext& ctx)
 {
     FolderScanResult scan;
@@ -850,6 +883,7 @@ int main()
     testFolderMixSplitsAcrossTwoSides(ctx);
     testAnalyzeLayoutRespectsManualSplit(ctx);
     testMixtapeEditorDeleteRecalculatesFit(ctx);
+    testMixtapeEditorSyncConsolidatesToOneCassette(ctx);
     testMultiCassetteSplitWhenAlbumExceedsOneTape(ctx);
     testAutoMasteringPlannerPicksMinimalForQuietSource(ctx);
     testAutoMasteringPlannerPicksTapePrepForHotBrightSource(ctx);

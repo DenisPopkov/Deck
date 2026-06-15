@@ -339,6 +339,51 @@ bool MixtapeEditController::deleteTrack(int sideIndex, int row)
     return true;
 }
 
+void MixtapeEditController::syncCassettePlan(const TapeLengthSpec& tape)
+{
+    saveActiveCassetteLayout();
+
+    const auto scan = mergedFullScan();
+    if (scan.tracks.empty())
+    {
+        cassetteCount = 1;
+        cassetteLayouts = { LayoutSnapshot {} };
+        activeCassetteIndex = 0;
+        loadCassetteLayout(0);
+        return;
+    }
+
+    const auto fit = FolderMixBuilder::analyzeFit(scan, tape);
+    const int newCount = juce::jmax(1, fit.cassetteCount);
+    if (newCount == cassetteCount)
+        return;
+
+    std::vector<LayoutSnapshot> newLayouts;
+
+    if (newCount == 1)
+    {
+        LayoutSnapshot merged;
+        for (const auto& layout : cassetteLayouts)
+        {
+            for (const auto& t : layout.sideA)
+                merged.sideA.push_back(t);
+            for (const auto& t : layout.sideB)
+                merged.sideB.push_back(t);
+        }
+        newLayouts.push_back(std::move(merged));
+    }
+    else
+    {
+        for (const auto& plan : fit.cassettes)
+            newLayouts.push_back(layoutFromPlan(scan, plan));
+    }
+
+    cassetteCount = newCount;
+    cassetteLayouts = std::move(newLayouts);
+    activeCassetteIndex = juce::jmin(activeCassetteIndex, cassetteCount - 1);
+    loadCassetteLayout(activeCassetteIndex);
+}
+
 void MixtapeEditController::rebalance(const TapeLengthSpec& tape)
 {
     saveActiveCassetteLayout();
