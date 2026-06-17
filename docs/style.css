@@ -542,6 +542,20 @@ section {
   margin: 0 0 8px;
 }
 
+.site-footer .footer-links {
+  margin: 0;
+}
+
+.site-footer a {
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.site-footer a:hover {
+  color: var(--accent);
+}
+
 /* Responsive */
 
 @media (max-width: 800px) {
