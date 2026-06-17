@@ -542,7 +542,7 @@ section {
 
 .faq-list {
   max-width: 760px;
-  margin: 0 auto;
+  margin: 0;
 }
 
 .faq-item {

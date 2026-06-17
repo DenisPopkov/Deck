@@ -29,8 +29,6 @@ MainComponent::MainComponent()
                      static_cast<juce::Component*>(&newButton),
                      static_cast<juce::Component*>(&startButton),
                      static_cast<juce::Component*>(&exportButton),
-                     static_cast<juce::Component*>(&playBeforeButton),
-                     static_cast<juce::Component*>(&playAfterButton),
                      static_cast<juce::Component*>(&status) })
         addAndMakeVisible(c);
 
@@ -56,37 +54,19 @@ MainComponent::MainComponent()
     Theme::styleExportButton(exportButton);
     Theme::styleNeutralButton(newButton);
     Theme::styleBlackButton(importButton);
-    Theme::styleNeutralButton(playBeforeButton);
-    Theme::styleNeutralButton(playAfterButton);
-
-    playBeforeButton.setButtonText("Before");
-    playAfterButton.setButtonText("After");
     exportButton.setButtonText("Export WAV");
     newButton.addListener(this);
     importButton.addListener(this);
     startButton.addListener(this);
     exportButton.addListener(this);
-    playBeforeButton.addListener(this);
-    playAfterButton.addListener(this);
     startButton.setEnabled(false);
     newButton.setEnabled(false);
     exportButton.setEnabled(false);
-    playBeforeButton.setEnabled(false);
-    playAfterButton.setEnabled(false);
 
     Theme::applyLabel(status, Theme::bodyFont(), Theme::textSecondary());
 
     dropHero.onChooseFolder = [this] { pickFolder(); };
     compareWaveform.setShowEmptyDropZone(false);
-    compareWaveform.onPreviewSideClicked = [this](bool afterSide) {
-        if (afterSide)
-        {
-            if (playAfterButton.isEnabled())
-                playAfterButton.triggerClick();
-        }
-        else if (playBeforeButton.isEnabled())
-            playBeforeButton.triggerClick();
-    };
 
     mixtapePanel.onFolderSelected = [this](const juce::File& folder) { scanMixFolder(folder); };
 
@@ -123,11 +103,6 @@ MainComponent::MainComponent()
         syncLayout();
     };
 
-    previewPlayer.setSource(&previewEngine);
-    previewEngine.setMonitoringEnabled(false);
-    previewDeviceManager.initialiseWithDefaultDevices(0, 2);
-    previewDeviceManager.addAudioCallback(&previewPlayer);
-
     setStatus({}, Theme::textSecondary());
     startTimerHz(12);
     setWantsKeyboardFocus(true);
@@ -138,20 +113,10 @@ MainComponent::MainComponent()
 MainComponent::~MainComponent()
 {
     stopTimer();
-    stopPreview();
-    previewPlayer.setSource(nullptr);
-    previewDeviceManager.removeAudioCallback(&previewPlayer);
-    previewDeviceManager.closeAudioDevice();
 }
 
 TapeSetupPanel& MainComponent::tapeSetup() { return tapeSetupPanel; }
 const TapeSetupPanel& MainComponent::tapeSetup() const { return tapeSetupPanel; }
-
-void MainComponent::stopPreview()
-{
-    previewEngine.setPlaying(false);
-    previewEngine.setPlayheadSec(0.0);
-}
 
 void MainComponent::setStatus(const juce::String& text, juce::Colour colour)
 {
@@ -166,15 +131,11 @@ void MainComponent::syncTransportButtonStyles()
 
     Theme::applyTransportButtonStyle(newButton, Theme::TransportButtonStyle::Neutral, newButton.isEnabled());
     Theme::applyTransportButtonStyle(importButton, Theme::TransportButtonStyle::Black, importButton.isEnabled());
-    Theme::applyTransportButtonStyle(playBeforeButton, Theme::TransportButtonStyle::Neutral, playBeforeButton.isEnabled());
-    Theme::applyTransportButtonStyle(playAfterButton, Theme::TransportButtonStyle::Neutral, playAfterButton.isEnabled());
     Theme::applyTransportButtonStyle(startButton, Theme::TransportButtonStyle::Rec, startButton.isEnabled());
     Theme::applyTransportButtonStyle(exportButton, Theme::TransportButtonStyle::Export, exportButton.isEnabled());
 
     newButton.repaint();
     importButton.repaint();
-    playBeforeButton.repaint();
-    playAfterButton.repaint();
     startButton.repaint();
     exportButton.repaint();
 }
@@ -219,9 +180,7 @@ void MainComponent::updateWizardState()
     startButton.setButtonText("Prepare");
     newButton.setEnabled((hasSource || hasProcessed) && !busy);
     exportButton.setEnabled(!busy && hasProcessed && loadedAudio.has_value());
-    playBeforeButton.setEnabled(!busy && hasProcessed && sourceAudio.has_value()
-                                && sourceAudio->buffer.getNumSamples() > 0);
-    playAfterButton.setEnabled(!busy && hasProcessed && loadedAudio.has_value());
+
     syncTransportButtonStyles();
 }
 
@@ -326,10 +285,6 @@ void MainComponent::resized()
     sessionLabel.setBounds(left.removeFromTop(72));
 
     auto topBar = centre.removeFromTop(56).reduced(14, 12);
-    playBeforeButton.setBounds(topBar.removeFromLeft(76));
-    topBar.removeFromLeft(8);
-    playAfterButton.setBounds(topBar.removeFromLeft(76));
-    topBar.removeFromLeft(12);
 
     if (!mixtapeModeActive)
     {
@@ -382,9 +337,13 @@ void MainComponent::resized()
     status.setBounds(statusRow);
 
     if (trackListEditor.isVisible())
+    {
         trackListEditor.setBounds(centre.reduced(8, 4));
+    }
     else
+    {
         compareWaveform.setBounds(centre.reduced(8, 4));
+    }
 }
 
 bool MainComponent::keyPressed(const juce::KeyPress& key)
@@ -457,47 +416,17 @@ void MainComponent::setUiProcessing(bool processing)
 {
     isProcessing.store(processing);
     if (processing)
-    {
         progress = 0.0;
-        stopPreview();
-    }
     if (!processing)
         refreshFolderFitLabel();
     syncLayout();
     repaint(progressBounds);
 }
 
-namespace
-{
-constexpr double kPreviewMaxSec = 45.0;
-
-juce::AudioBuffer<float> previewSnippet(const juce::AudioBuffer<float>& source, double sampleRate)
-{
-    const int maxSamples = static_cast<int>(kPreviewMaxSec * sampleRate);
-    if (source.getNumSamples() <= maxSamples)
-        return source;
-
-    juce::AudioBuffer<float> snippet;
-    snippet.makeCopyOf(source);
-    snippet.setSize(snippet.getNumChannels(), maxSamples, true, true, true);
-    return snippet;
-}
-}
-
-void MainComponent::syncPreviewBuffer(const std::optional<LoadedAudio>& audio)
-{
-    if (!audio.has_value())
-        return;
-    auto copy = previewSnippet(audio->buffer, audio->sampleRate);
-    previewEngine.setBuffer(std::move(copy), audio->sampleRate);
-}
-
 void MainComponent::resetSession()
 {
     if (isProcessing.load())
         return;
-
-    stopPreview();
 
     hasSource = false;
     hasProcessed = false;
@@ -524,8 +453,6 @@ void MainComponent::resetSession()
     readySummary.setVisible(false);
     sessionLabel.setText("No project loaded", juce::dontSendNotification);
     exportButton.setEnabled(false);
-    playBeforeButton.setEnabled(false);
-    playAfterButton.setEnabled(false);
 
     tapeSetupPanel.setMixtapeMode(false);
     tapeSetupPanel.setTapeFitSummary({}, true);
@@ -540,7 +467,6 @@ void MainComponent::resetSession()
 
 void MainComponent::invalidatePreparedOutput()
 {
-    stopPreview();
     hasProcessed = false;
     preparedTapeLabel = {};
     lastQuality.reset();
@@ -1239,25 +1165,6 @@ void MainComponent::buttonClicked(juce::Button* button)
     {
         exportWav();
         return;
-    }
-    if (button == &playBeforeButton)
-    {
-        if (!sourceAudio.has_value())
-            return;
-        stopPreview();
-        syncPreviewBuffer(sourceAudio);
-        previewEngine.setPlayheadSec(0.0);
-        previewEngine.setPlaying(true);
-        return;
-    }
-    if (button == &playAfterButton)
-    {
-        if (!loadedAudio.has_value())
-            return;
-        stopPreview();
-        syncPreviewBuffer(loadedAudio);
-        previewEngine.setPlayheadSec(0.0);
-        previewEngine.setPlaying(true);
     }
 }
 

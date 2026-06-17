@@ -68,22 +68,18 @@ open build/Deck_artefacts/Release/Deck.app
 
 ### Сборка (Windows)
 
-На машине с Visual Studio 2022:
+На машине с Visual Studio 2022 (MSVC, не MinGW):
 
 ```powershell
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release
+.\scripts\build_windows_msvc.ps1 -Package
 ```
+
+Исполняемый файл: `build\Deck_artefacts\Release\Deck.exe`  
+ZIP для распространения: `dist\Deck-<версия>-Windows.zip`
 
 Для CI и локальной сборки используется **MSVC** (Visual Studio toolchain), так как JUCE 8 официально не поддерживает MinGW.
 
-Или вспомогательный скрипт:
-
-```powershell
-.\scripts\build_windows_msvc.ps1
-```
-
-Исполняемый файл: `build\Deck_artefacts\Release\`.
+Подробная инструкция: [`scripts/BUILD-WINDOWS.md`](scripts/BUILD-WINDOWS.md).
 
 Готовые архивы для Windows и MacOS также публикуются в GitHub Actions (workflow **Release builds** на тегах).
 На каждом push/pull request в `main`/`master` Windows-архив публикуется как artifact в workflow **Windows build**.
@@ -230,22 +226,18 @@ Output: `dist/macOS/Deck.app` and `dist/Deck-0.2.0-macOS.zip`.
 
 ### Build (Windows)
 
-From a machine with Visual Studio 2022:
+On a machine with Visual Studio 2022 (MSVC, not MinGW):
 
 ```powershell
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release
+.\scripts\build_windows_msvc.ps1 -Package
 ```
+
+Executable: `build\Deck_artefacts\Release\Deck.exe`  
+Release zip: `dist\Deck-<version>-Windows.zip`
 
 CI and local automation use **MSVC** (Visual Studio toolchain), because JUCE 8 does not officially support MinGW.
 
-Or use the helper script:
-
-```powershell
-.\scripts\build_windows_msvc.ps1
-```
-
-Executable path: `build\Deck_artefacts\Release\`.
+Full guide: [`scripts/BUILD-WINDOWS.md`](scripts/BUILD-WINDOWS.md).
 
 Prebuilt Windows and MacOS archives are also published in GitHub Actions (`Release builds` workflow on tags).
 On every push/pull request to `main`/`master`, the Windows archive is uploaded as an artifact in the `Windows build` workflow.

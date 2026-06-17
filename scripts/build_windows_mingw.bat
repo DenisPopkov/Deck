@@ -1,16 +1,9 @@
 @echo off
-REM Build on Windows with Visual Studio or MinGW.
-setlocal
-cd /d "%~dp0\.."
-
-if not exist Assets\AppIcon.png (
-  echo Copy Assets\AppIcon.png first ^(1024x1024 PNG from your icon^).
-  exit /b 1
-)
-
-cmake -B build-win -DCMAKE_BUILD_TYPE=Release -DCASSETTE_BUILD_TESTS=OFF
-cmake --build build-win --config Release
+REM MinGW is NOT supported by JUCE 8. Use scripts\build_windows_msvc.ps1 instead.
+REM See scripts\BUILD-WINDOWS.md
+echo ERROR: MinGW build is not supported for Deck (JUCE 8 requires MSVC).
 echo.
-echo Output:
-dir /s /b build-win\Deck_artefacts\Release\*.exe
-pause
+echo Use PowerShell instead:
+echo   .\scripts\build_windows_msvc.ps1
+echo.
+exit /b 1

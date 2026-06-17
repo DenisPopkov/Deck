@@ -16,7 +16,6 @@
 #include "../project/FolderMixBuilder.h"
 #include "../project/MixtapeEditController.h"
 #include "TrackListEditor.h"
-#include "../audio/PreviewEngine.h"
 #include "../analysis/PerceptualQualityGuard.h"
 
 namespace cassette
@@ -54,12 +53,10 @@ private:
     void startProcessing();
     void startFolderMixBuild();
     void finishProcessing(bool success, const juce::String& message);
-    void syncPreviewBuffer(const std::optional<LoadedAudio>& audio);
     void scanMixFolder(const juce::File& folder);
     void refreshFolderFitLabel();
     void exportWav();
     void pickFolder();
-    void stopPreview();
     void resetSession();
     void invalidatePreparedOutput();
     void promptChangeTapeType();
@@ -92,8 +89,6 @@ private:
     juce::TextButton importButton { "Import audio" };
     juce::TextButton startButton { "Prepare" };
     juce::TextButton exportButton { "Export WAV" };
-    juce::TextButton playBeforeButton { "Play Before" };
-    juce::TextButton playAfterButton { "Play After" };
 
     CompareWaveformDisplay compareWaveform;
     TrackListEditor trackListEditor;
@@ -137,10 +132,6 @@ private:
     std::atomic<bool> isProcessing { false };
     int windowDragDepth = 0;
     DropPayloadKind activeDropKind = DropPayloadKind::None;
-
-    juce::AudioDeviceManager previewDeviceManager;
-    juce::AudioSourcePlayer previewPlayer;
-    PreviewEngine previewEngine;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MainComponent)
 };
