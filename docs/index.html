@@ -21,7 +21,6 @@
         <li><a href="#features">Features</a></li>
         <li><a href="#platforms">Platforms</a></li>
         <li><a href="#faq">FAQ</a></li>
-        <li><a href="https://github.com/DenisPopkov/Deck">GitHub</a></li>
       </ul>
       <a class="btn btn-primary btn-small" href="#download">Download</a>
     </div>
@@ -40,11 +39,10 @@
         </p>
         <div class="hero-cta">
           <a class="btn btn-primary" href="#download">Download Deck</a>
-          <a class="btn btn-secondary" href="https://github.com/DenisPopkov/Deck">View on GitHub</a>
         </div>
-        <p class="hero-meta">Free &amp; open source · macOS &amp; Windows · No DAW required</p>
+        <p class="hero-meta">MacOS &amp; Windows · No DAW required</p>
         <figure class="hero-shot">
-          <img src="assets/screenshot-hero.png" alt="Deck main window with drop zone and tape setup" width="960" height="600" loading="eager">
+          <img src="assets/macbook.png" alt="Deck on MacBook — mixtape editor with Side A and Side B track lists" width="11838" height="7305" loading="eager">
         </figure>
       </div>
     </section>
@@ -80,73 +78,24 @@
         <span class="section-label">Features</span>
         <h2 class="section-title">Everything you need before you hit record</h2>
 
-        <article class="feature">
-          <div class="feature-copy">
+        <div class="feature-grid">
+          <article class="feature-card">
             <h3>Drop &amp; prepare</h3>
-            <p>Start fast — drag a file onto the window or import a folder for a full mixtape.</p>
-            <ul class="feature-list">
-              <li>Drag-and-drop audio files or folders</li>
-              <li>One-click <strong>Prepare</strong> with adaptive mastering</li>
-              <li>Before / after preview with waveform comparison</li>
-            </ul>
-          </div>
-          <div class="feature-visual">
-            <div class="visual-frame">
-              <img src="assets/screenshot-drop.png" alt="Deck drop zone for audio files and folders" width="960" height="600" loading="lazy">
-            </div>
-          </div>
-        </article>
-
-        <article class="feature reverse">
-          <div class="feature-copy">
+            <p>Drag a file or import a folder, then one-click <strong>Prepare</strong> with adaptive mastering and before/after preview.</p>
+          </article>
+          <article class="feature-card">
             <h3>Tape setup</h3>
-            <p>Match your deck and blank tape. Deck adapts processing to the profile you choose.</p>
-            <ul class="feature-list">
-              <li>Type I (Normal), Type II (Chrome), Type IV (Metal)</li>
-              <li>C60, C90, C120 or custom minutes per side</li>
-              <li>Quick presets — Normal, Chrome, and Metal deck</li>
-            </ul>
-          </div>
-          <div class="feature-visual">
-            <div class="visual-frame">
-              <img src="assets/screenshot-tape.png" alt="Tape type and length setup in Deck" width="960" height="600" loading="lazy">
-            </div>
-          </div>
-        </article>
-
-        <article class="feature">
-          <div class="feature-copy">
+            <p>Type I, II, or IV — C60, C90, C120 or custom length. Processing follows your blank tape and deck.</p>
+          </article>
+          <article class="feature-card">
             <h3>Mixtape builder</h3>
-            <p>Planning a full cassette side? Import a folder and arrange tracks before mastering.</p>
-            <ul class="feature-list">
-              <li>Folder import with automatic track ordering</li>
-              <li>Track list editor — reorder and trim the lineup</li>
-              <li>Fit check — see if your selection fits the chosen tape length</li>
-            </ul>
-          </div>
-          <div class="feature-visual">
-            <div class="visual-frame">
-              <img src="assets/screenshot-mixtape.png" alt="Mixtape track list editor in Deck" width="960" height="600" loading="lazy">
-            </div>
-          </div>
-        </article>
-
-        <article class="feature reverse">
-          <div class="feature-copy">
+            <p>Split tracks across Side A and Side B, reorder the lineup, and check fit before you master.</p>
+          </article>
+          <article class="feature-card">
             <h3>Export ready</h3>
-            <p>When it sounds right, export a clean WAV and head to your deck.</p>
-            <ul class="feature-list">
-              <li>True-peak limiting and cassette-aware EQ</li>
-              <li>Optional preflight tones for level calibration</li>
-              <li>Export WAV — ready for line-in or headphone jack recording</li>
-            </ul>
-          </div>
-          <div class="feature-visual">
-            <div class="visual-frame">
-              <img src="assets/screenshot-export.png" alt="Before and after waveform comparison with export" width="960" height="600" loading="lazy">
-            </div>
-          </div>
-        </article>
+            <p>True-peak limiting, cassette-aware EQ, optional preflight tones — export WAV and hit record.</p>
+          </article>
+        </div>
       </div>
     </section>
 
@@ -154,7 +103,7 @@
       <div class="container">
         <span class="section-label">Platforms</span>
         <h2 class="section-title">Where Deck runs</h2>
-        <p class="section-intro">Desktop app built with JUCE. Pre-built binaries are available from GitHub Releases.</p>
+        <p class="section-intro">Available for Mac and PC.</p>
         <table class="compat-table">
           <thead>
             <tr>
@@ -165,19 +114,14 @@
           </thead>
           <tbody>
             <tr>
-              <td><strong>macOS</strong></td>
+              <td><strong>MacOS</strong></td>
               <td><span class="badge badge-ok">Available</span></td>
-              <td>macOS 12+ · Apple Silicon or Intel</td>
+              <td>MacOS 12+ · Apple Silicon or Intel</td>
             </tr>
             <tr>
               <td><strong>Windows</strong></td>
               <td><span class="badge badge-ok">Available</span></td>
-              <td>Windows 10/11 · x64</td>
-            </tr>
-            <tr>
-              <td><strong>Linux</strong></td>
-              <td><span class="badge badge-no">Not yet</span></td>
-              <td>Build from source only</td>
+              <td>Windows 10/11</td>
             </tr>
           </tbody>
         </table>
@@ -188,32 +132,12 @@
       <div class="container">
         <div class="download-cta">
           <h2>Download Deck</h2>
-          <p>
-            Grab the latest release for your platform. macOS builds are packaged as <code>Deck.app</code>;
-            Windows builds ship as a zip with the executable inside.
-          </p>
+          <p>Choose your platform and install the app.</p>
           <div class="download-buttons">
-            <a class="btn btn-primary" href="https://github.com/DenisPopkov/Deck/releases/latest/download/Deck-macOS.zip">macOS</a>
+            <a class="btn btn-primary" href="https://github.com/DenisPopkov/Deck/releases/latest/download/Deck-macOS.zip">MacOS</a>
             <a class="btn btn-primary" href="https://github.com/DenisPopkov/Deck/releases/latest/download/Deck-Windows.zip">Windows</a>
-            <a class="btn btn-secondary" href="https://github.com/DenisPopkov/Deck/releases/latest">All releases</a>
           </div>
-          <p class="download-note">
-            Push a tag like <code>v0.2.0</code> to build and publish both zips automatically.
-            Until the first release, use <a href="https://github.com/DenisPopkov/Deck/actions/workflows/release.yml">CI artifacts</a>.
-          </p>
         </div>
-      </div>
-    </section>
-
-    <section class="panel" id="evolving">
-      <div class="container" style="text-align: center;">
-        <span class="section-label">Active development</span>
-        <h2 class="section-title">Deck keeps evolving</h2>
-        <p class="section-intro" style="margin-inline: auto;">
-          Deck is an engineering prototype that keeps improving — mastering pipeline, mixtape workflow,
-          and packaging are updated regularly. Feedback and issues are welcome on GitHub.
-        </p>
-        <a class="btn btn-secondary" href="https://github.com/DenisPopkov/Deck/releases">Explore release notes</a>
       </div>
     </section>
 
@@ -238,7 +162,7 @@
           </details>
 
           <details class="faq-item">
-            <summary>macOS says the app is from an unidentified developer</summary>
+            <summary>MacOS says the app is from an unidentified developer</summary>
             <div class="faq-answer">
               <p>Release builds are not notarized yet. Right-click <strong>Deck.app</strong> → <strong>Open</strong>, then confirm. You only need to do this once.</p>
             </div>
@@ -258,13 +182,6 @@
             </div>
           </details>
 
-          <details class="faq-item">
-            <summary>How do I build from source?</summary>
-            <div class="faq-answer">
-              <p>See the <a href="https://github.com/DenisPopkov/Deck#build-macos">README on GitHub</a>. You need CMake 3.22+ and Xcode Command Line Tools (macOS) or Visual Studio 2022 (Windows).</p>
-            </div>
-          </details>
-
         </div>
       </div>
     </section>
@@ -273,8 +190,7 @@
 
   <footer class="site-footer">
     <div class="container">
-      <p>Deck — cassette prep mastering for macOS &amp; Windows</p>
-      <p><a href="https://github.com/DenisPopkov/Deck">github.com/DenisPopkov/Deck</a></p>
+      <p>Deck — prepare audio for cassette recording</p>
     </div>
   </footer>
 
