@@ -541,7 +541,8 @@ section {
 /* FAQ */
 
 .faq-list {
-  max-width: 760px;
+  max-width: none;
+  width: 100%;
   margin: 0;
 }
 
