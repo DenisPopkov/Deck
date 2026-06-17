@@ -100,16 +100,12 @@ def apply_squircle(img: Image.Image) -> Image.Image:
     return out
 
 
-def scale_dock_tile(
-    icon: Image.Image,
-    tile_scale: float = DOCK_TILE_SCALE,
-    bg: tuple[int, int, int] | None = ICON_BACKGROUND,
-) -> Image.Image:
+def scale_dock_tile(icon: Image.Image, tile_scale: float = DOCK_TILE_SCALE) -> Image.Image:
+    """Shrink artwork for Dock safe-zone; outer margin stays transparent."""
     size = icon.size[0]
     inner = max(1, int(size * tile_scale))
     scaled = icon.resize((inner, inner), Image.Resampling.LANCZOS)
-    canvas_bg = (*bg, 255) if bg is not None else (0, 0, 0, 0)
-    canvas = Image.new("RGBA", (size, size), canvas_bg)
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     offset = (size - inner) // 2
     canvas.paste(scaled, (offset, offset), scaled)
     return canvas
@@ -129,7 +125,7 @@ def compose_macos_icon(
         canvas = Image.new("RGBA", (size, size), (*bg, 255))
         offset = (size - inner) // 2
         canvas.paste(fitted, (offset, offset), fitted)
-        return scale_dock_tile(apply_squircle(canvas))
+        return apply_squircle(scale_dock_tile(canvas))
 
     cropped = crop_to_artwork(src_rgba)
     cw, ch = cropped.size
@@ -141,7 +137,7 @@ def compose_macos_icon(
 
     canvas = Image.new("RGBA", (size, size), (*bg, 255))
     canvas.paste(scaled, ((size - nw) // 2, (size - nh) // 2), scaled)
-    return scale_dock_tile(apply_squircle(canvas))
+    return apply_squircle(scale_dock_tile(canvas))
 
 
 def compose_icon(
