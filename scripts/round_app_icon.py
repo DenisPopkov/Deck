@@ -24,7 +24,44 @@ SQUARE_MASTER_FILL = 0.8925
 DOCK_TILE_SCALE = 0.84
 MACOS_ARTWORK_SCALE = MACOS_SAFE_FILL
 APPSTORE_ARTWORK_FILL = 0.84
-ICON_BACKGROUND = (0, 0, 0)
+BRAND_ORANGE = (253, 105, 2)  # #FD6902
+ICON_BACKGROUND = BRAND_ORANGE
+LOGO_NEW = ASSETS / "LogoNew.png"
+
+
+def prepare_deck_source(src: Image.Image, size: int = 1024) -> Image.Image:
+    """Flat brand-orange plate + white DECK lettering (no circle seam)."""
+    rgba = src.convert("RGBA")
+    w, h = rgba.size
+    side = min(w, h)
+    rgba = rgba.crop(((w - side) // 2, (h - side) // 2, (w + side) // 2, (h + side) // 2))
+    rgba = rgba.resize((size, size), Image.Resampling.LANCZOS)
+
+    out = Image.new("RGBA", (size, size), (*BRAND_ORANGE, 255))
+    spx = rgba.load()
+    opx = out.load()
+    br, bg, bb = BRAND_ORANGE
+
+    for y in range(size):
+        for x in range(size):
+            r, g, b, a = spx[x, y]
+            if a < 16:
+                continue
+            # Keep near-white text + soft antialias; flatten every orange shade to brand.
+            if min(r, g, b) >= 210:
+                opx[x, y] = (r, g, b, 255)
+            elif r > 170 and g > 110 and b > 70:
+                t = max(0.0, min(1.0, (min(r, g, b) - 110) / 100.0))
+                opx[x, y] = (
+                    int(br + (255 - br) * t),
+                    int(bg + (255 - bg) * t),
+                    int(bb + (255 - bb) * t),
+                    255,
+                )
+            else:
+                opx[x, y] = (br, bg, bb, 255)
+
+    return out
 
 
 def squircle_alpha(size: int) -> Image.Image:
@@ -63,11 +100,16 @@ def apply_squircle(img: Image.Image) -> Image.Image:
     return out
 
 
-def scale_dock_tile(icon: Image.Image, tile_scale: float = DOCK_TILE_SCALE) -> Image.Image:
+def scale_dock_tile(
+    icon: Image.Image,
+    tile_scale: float = DOCK_TILE_SCALE,
+    bg: tuple[int, int, int] | None = ICON_BACKGROUND,
+) -> Image.Image:
     size = icon.size[0]
     inner = max(1, int(size * tile_scale))
     scaled = icon.resize((inner, inner), Image.Resampling.LANCZOS)
-    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    canvas_bg = (*bg, 255) if bg is not None else (0, 0, 0, 0)
+    canvas = Image.new("RGBA", (size, size), canvas_bg)
     offset = (size - inner) // 2
     canvas.paste(scaled, (offset, offset), scaled)
     return canvas
@@ -119,7 +161,7 @@ def _has_visible_pixels(path: Path) -> bool:
 
 
 def pick_source() -> Path:
-    for path in (CASSETTE_PNG, APPSTORE_PNG, ICON_JPEG, SRC):
+    for path in (LOGO_NEW, CASSETTE_PNG, APPSTORE_PNG, ICON_JPEG, SRC):
         if not path.exists():
             continue
         if path == SRC and not _has_visible_pixels(path):
@@ -166,8 +208,16 @@ def main() -> None:
         print(f"Source not found: {source}", file=sys.stderr)
         sys.exit(1)
 
-    icon = compose_macos_icon(Image.open(source).convert("RGBA"))
+    raw = Image.open(source).convert("RGBA")
+    master = prepare_deck_source(raw) if source.resolve() in {
+        LOGO_NEW.resolve(),
+        CASSETTE_PNG.resolve(),
+    } else raw
     ASSETS.mkdir(parents=True, exist_ok=True)
+    if source.resolve() in {LOGO_NEW.resolve(), CASSETTE_PNG.resolve()}:
+        master.save(CASSETTE_PNG, "PNG")
+
+    icon = compose_macos_icon(master)
     icon.save(OUT, "PNG")
     print(f"Wrote macOS AppIcon (squircle RGBA): {OUT}")
 
