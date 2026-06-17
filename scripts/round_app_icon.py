@@ -111,6 +111,22 @@ def scale_dock_tile(icon: Image.Image, tile_scale: float = DOCK_TILE_SCALE) -> I
     return canvas
 
 
+def is_full_bleed_plate(src: Image.Image, bg: tuple[int, int, int], tolerance: int = 24) -> bool:
+    """True when artwork fills the square (e.g. flat brand plate)."""
+    rgba = src.convert("RGBA")
+    if rgba.width != rgba.height:
+        return False
+    px = rgba.load()
+    br, bgc, bb = bg
+    for x, y in ((0, 0), (rgba.width - 1, 0), (0, rgba.height - 1), (rgba.width - 1, rgba.height - 1)):
+        r, g, b, a = px[x, y]
+        if a < 200:
+            return False
+        if abs(r - br) > tolerance or abs(g - bgc) > tolerance or abs(b - bb) > tolerance:
+            return False
+    return True
+
+
 def compose_macos_icon(
     src: Image.Image,
     size: int = 1024,
@@ -118,6 +134,13 @@ def compose_macos_icon(
 ) -> Image.Image:
     bg = ICON_BACKGROUND
     src_rgba = src.convert("RGBA")
+
+    if is_full_bleed_plate(src_rgba, bg):
+        fitted = src_rgba if src_rgba.size == (size, size) else src_rgba.resize(
+            (size, size), Image.Resampling.LANCZOS
+        )
+        # Round the coloured plate first; otherwise Dock shows a sharp orange square.
+        return scale_dock_tile(apply_squircle(fitted))
 
     if abs(src_rgba.width - src_rgba.height) <= max(src_rgba.width, src_rgba.height) * 0.05:
         inner = int(size * SQUARE_MASTER_FILL)

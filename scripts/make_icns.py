@@ -19,6 +19,9 @@ from round_app_icon import (  # noqa: E402
     from_appstore_master,
     load_source,
     pick_source,
+    prepare_deck_source,
+    LOGO_NEW,
+    CASSETTE_PNG,
 )
 
 ICONSET = Path("/tmp/Deck.iconset")
@@ -32,8 +35,10 @@ def build_master(source: Path) -> Image.Image:
     if source.suffix.lower() in {".jpg", ".jpeg"}:
         return compose_macos_icon(load_source(source))
 
-    src = Image.open(source).convert("RGBA")
-    return compose_macos_icon(src)
+    raw = Image.open(source).convert("RGBA")
+    if source.resolve() in {LOGO_NEW.resolve(), CASSETTE_PNG.resolve()}:
+        raw = prepare_deck_source(raw)
+    return compose_macos_icon(raw)
 
 
 def write_iconset(master: Image.Image, iconset_dir: Path) -> None:
