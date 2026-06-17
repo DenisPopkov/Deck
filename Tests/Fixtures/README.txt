@@ -11,7 +11,7 @@ Or manually:
     -c:a flac Tests/Fixtures/Charli-XCX-SS26-Rock-Music.fixture.flac
 
 Icon sources (Assets/):
-  IconSource.png      square cassette artwork master
+  IconSource.png      square DECK artwork master
   AppIconSource.jpg   alternate JPEG master
   AppStoreSource.png  optional App Store-style master (if present)
   AppIcon.png         generated squircle icon for the app bundle

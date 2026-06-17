@@ -132,7 +132,7 @@ PeaqEvaluation evaluateGStreamer(const juce::AudioBuffer<float>& reference,
     result.backend = PeaqBackend::GStreamer;
 
     const auto tempDir = juce::File::getSpecialLocation(juce::File::tempDirectory)
-                             .getChildFile("CassetteAutoMaster_peaq");
+                             .getChildFile("Deck_peaq");
     tempDir.createDirectory();
 
     const auto refFile = tempDir.getNonexistentChildFile("ref", ".wav");

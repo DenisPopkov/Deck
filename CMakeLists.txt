@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(CassetteAutoMaster VERSION 0.1.0 LANGUAGES C CXX)
+project(Deck VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -55,16 +55,16 @@ endif()
 
 set(CASSETTE_APP_ICON "${CMAKE_SOURCE_DIR}/Assets/AppIcon.png")
 
-juce_add_gui_app(CassetteAutoMaster
-    PRODUCT_NAME "CassetteMaster"
-    COMPANY_NAME "CassetteMaster"
-    BUNDLE_ID com.cassettemaster.app
+juce_add_gui_app(Deck
+    PRODUCT_NAME "Deck"
+    COMPANY_NAME "Deck"
+    BUNDLE_ID com.deck.app
     ICON_BIG "${CASSETTE_APP_ICON}"
     NEEDS_CURL FALSE
     NEEDS_WEB_BROWSER FALSE
 )
 
-target_sources(CassetteAutoMaster PRIVATE
+target_sources(Deck PRIVATE
     Source/Main.cpp
     Source/ui/MainComponent.cpp
     Source/ui/TapeSetupPanel.cpp
@@ -85,21 +85,21 @@ target_sources(CassetteAutoMaster PRIVATE
     Source/util/AppLog.cpp
 )
 
-target_include_directories(CassetteAutoMaster PRIVATE
+target_include_directories(Deck PRIVATE
     Source
     Source/io
     Source/threading
     Source/ui
 )
 
-target_compile_definitions(CassetteAutoMaster PRIVATE
+target_compile_definitions(Deck PRIVATE
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     JUCE_DISPLAY_SPLASH_SCREEN=0
     JUCE_MODAL_LOOPS_PERMITTED=1
 )
 
-target_link_libraries(CassetteAutoMaster PRIVATE
+target_link_libraries(Deck PRIVATE
     cassette_core
     juce::juce_audio_utils
     juce::juce_audio_devices
@@ -113,7 +113,7 @@ if(CASSETTE_BUILD_ESSENTIA)
         target_include_directories(cassette_core PRIVATE ${CASSETTE_ESSENTIA_INCLUDE})
         target_link_libraries(cassette_core PRIVATE ${CASSETTE_ESSENTIA_LIBRARY})
         target_compile_definitions(cassette_core PRIVATE CASSETTE_HAS_ESSENTIA=1)
-        target_compile_definitions(CassetteAutoMaster PRIVATE CASSETTE_HAS_ESSENTIA=1)
+        target_compile_definitions(Deck PRIVATE CASSETTE_HAS_ESSENTIA=1)
     else()
         message(STATUS "CASSETTE_BUILD_ESSENTIA=ON but Essentia not found — using built-in LoudnessMeter")
     endif()
@@ -121,28 +121,28 @@ endif()
 
 if(CASSETTE_BUILD_GSTPEAQ)
     target_compile_definitions(cassette_core PRIVATE CASSETTE_HAS_GSTPEAQ=1)
-    target_compile_definitions(CassetteAutoMaster PRIVATE CASSETTE_HAS_GSTPEAQ=1)
+    target_compile_definitions(Deck PRIVATE CASSETTE_HAS_GSTPEAQ=1)
 endif()
 
-juce_generate_juce_header(CassetteAutoMaster)
+juce_generate_juce_header(Deck)
 
 # JUCE rebuilds a square Icon.icns from AppIcon.png; restore squircle after each link.
 if(APPLE)
     add_custom_command(
-        TARGET CassetteAutoMaster
+        TARGET Deck
         POST_BUILD
         COMMAND /bin/bash "${CMAKE_SOURCE_DIR}/scripts/apply_app_icon.sh"
-                "$<TARGET_FILE_DIR:CassetteAutoMaster>/../.."
+                "$<TARGET_FILE_DIR:Deck>/../.."
         COMMAND ${CMAKE_COMMAND} -E make_directory
-                "$<TARGET_FILE_DIR:CassetteAutoMaster>/../Resources/scripts"
+                "$<TARGET_FILE_DIR:Deck>/../Resources/scripts"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 "${CMAKE_SOURCE_DIR}/scripts/run_peaq.sh"
-                "$<TARGET_FILE_DIR:CassetteAutoMaster>/../Resources/scripts/run_peaq.sh"
+                "$<TARGET_FILE_DIR:Deck>/../Resources/scripts/run_peaq.sh"
         COMMAND ${CMAKE_COMMAND} -E make_directory
-                "$<TARGET_FILE_DIR:CassetteAutoMaster>/../Resources/models"
+                "$<TARGET_FILE_DIR:Deck>/../Resources/models"
         COMMAND /bin/bash "${CMAKE_SOURCE_DIR}/scripts/copy_stn_onnx_if_present.sh"
                 "${CMAKE_SOURCE_DIR}/models/tape_stn.onnx"
-                "$<TARGET_FILE_DIR:CassetteAutoMaster>/../Resources/models/tape_stn.onnx"
+                "$<TARGET_FILE_DIR:Deck>/../Resources/models/tape_stn.onnx"
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
         COMMENT "Applying squircle Dock icon + GstPEAQ script"
     )
@@ -151,29 +151,29 @@ endif()
 if(CASSETTE_BUILD_TESTS)
     enable_testing()
 
-    add_executable(CassetteAutoMasterTests Tests/MasteringTests.cpp)
-    cassette_configure_core_target(CassetteAutoMasterTests)
-    target_sources(CassetteAutoMasterTests PRIVATE Tests/TestAppLogStub.cpp)
-    target_link_libraries(CassetteAutoMasterTests PRIVATE cassette_core)
+    add_executable(DeckTests Tests/MasteringTests.cpp)
+    cassette_configure_core_target(DeckTests)
+    target_sources(DeckTests PRIVATE Tests/TestAppLogStub.cpp)
+    target_link_libraries(DeckTests PRIVATE cassette_core)
     if(CASSETTE_BUILD_GSTPEAQ)
-        target_compile_definitions(CassetteAutoMasterTests PRIVATE CASSETTE_HAS_GSTPEAQ=1)
+        target_compile_definitions(DeckTests PRIVATE CASSETTE_HAS_GSTPEAQ=1)
     endif()
     if(CASSETTE_BUILD_ONNX AND CASSETTE_ONNX_FOUND)
-        target_compile_definitions(CassetteAutoMasterTests PRIVATE CASSETTE_HAS_ONNX=1)
-        target_compile_definitions(CassetteAutoMasterTests PRIVATE
+        target_compile_definitions(DeckTests PRIVATE CASSETTE_HAS_ONNX=1)
+        target_compile_definitions(DeckTests PRIVATE
             CASSETTE_STN_MODEL="${CMAKE_SOURCE_DIR}/models/tape_stn.onnx")
     endif()
     if(CASSETTE_BUILD_RUBBERBAND AND CASSETTE_RUBBERBAND_FOUND)
-        target_compile_definitions(CassetteAutoMasterTests PRIVATE CASSETTE_HAS_RUBBERBAND=1)
+        target_compile_definitions(DeckTests PRIVATE CASSETTE_HAS_RUBBERBAND=1)
     endif()
 
     set(CASSETTE_CHARLI_FIXTURE "${CMAKE_SOURCE_DIR}/Tests/Fixtures/Charli-XCX-SS26-Rock-Music.fixture.flac")
     if(EXISTS "${CASSETTE_CHARLI_FIXTURE}")
-        target_compile_definitions(CassetteAutoMasterTests PRIVATE
+        target_compile_definitions(DeckTests PRIVATE
             CASSETTE_CHARLI_FIXTURE="${CASSETTE_CHARLI_FIXTURE}")
     endif()
 
-    add_test(NAME MasteringAdequacy COMMAND CassetteAutoMasterTests)
+    add_test(NAME MasteringAdequacy COMMAND DeckTests)
 
     add_executable(CassetteAnalyzeExport Tools/AnalyzeExport.cpp)
     cassette_configure_core_target(CassetteAnalyzeExport)
@@ -195,7 +195,7 @@ endif()
 if(CASSETTE_BUILD_BURNER)
     juce_add_gui_app(CassetteBurner
         PRODUCT_NAME "CassetteBurner"
-        COMPANY_NAME "CassetteAutoMaster"
+        COMPANY_NAME "Deck"
         BUNDLE_ID com.cassetteautomaster.burner
         ICON_BIG "${CASSETTE_APP_ICON}"
         NEEDS_CURL FALSE
@@ -259,7 +259,7 @@ endif()
 if(CASSETTE_BUILD_PLUGIN)
     juce_add_plugin(CassetteTapePrep
         VERSION 0.9.0
-        COMPANY_NAME "CassetteAutoMaster"
+        COMPANY_NAME "Deck"
         IS_SYNTH FALSE
         NEEDS_MIDI_INPUT FALSE
         NEEDS_MIDI_OUTPUT FALSE

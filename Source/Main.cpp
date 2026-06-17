@@ -3,10 +3,10 @@
 #include "ui/look/CassetteLook.h"
 #include "util/AppLog.h"
 
-class CassetteAutoMasterApplication : public juce::JUCEApplication
+class DeckApplication : public juce::JUCEApplication
 {
 public:
-    const juce::String getApplicationName() override { return "CassetteMaster"; }
+    const juce::String getApplicationName() override { return "Deck"; }
     const juce::String getApplicationVersion() override { return "1.0.0"; }
     bool moreThanOneInstanceAllowed() override { return true; }
 
@@ -83,4 +83,4 @@ private:
     std::unique_ptr<cassette::CassetteLook> lookAndFeel;
 };
 
-START_JUCE_APPLICATION(CassetteAutoMasterApplication)
+START_JUCE_APPLICATION(DeckApplication)

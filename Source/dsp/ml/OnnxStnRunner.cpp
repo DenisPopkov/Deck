@@ -20,7 +20,7 @@ constexpr int kOnnxBlockSamples = 8192;
 #if defined(CASSETTE_HAS_ONNX)
 struct OnnxStnRunner::Impl
 {
-    Ort::Env env { ORT_LOGGING_LEVEL_WARNING, "CassetteAutoMaster" };
+    Ort::Env env { ORT_LOGGING_LEVEL_WARNING, "Deck" };
     Ort::SessionOptions options;
     std::unique_ptr<Ort::Session> session;
     std::vector<std::string> nameStorage;

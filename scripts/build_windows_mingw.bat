@@ -12,5 +12,5 @@ cmake -B build-win -DCMAKE_BUILD_TYPE=Release -DCASSETTE_BUILD_TESTS=OFF
 cmake --build build-win --config Release
 echo.
 echo Output:
-dir /s /b build-win\CassetteAutoMaster_artefacts\Release\*.exe
+dir /s /b build-win\Deck_artefacts\Release\*.exe
 pause

@@ -18,12 +18,12 @@ jobs:
           ctest --test-dir build --output-on-failure
       - name: Package zip
         run: |
-          APP="build/CassetteAutoMaster_artefacts/Release/CassetteMaster.app"
-          ditto -c -k --sequesterRsrc --keepParent "$APP" CassetteAutoMaster-macOS.zip
+          APP="build/Deck_artefacts/Release/Deck.app"
+          ditto -c -k --sequesterRsrc --keepParent "$APP" Deck-macOS.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: CassetteAutoMaster-macOS
-          path: CassetteAutoMaster-macOS.zip
+          name: Deck-macOS
+          path: Deck-macOS.zip
 
   windows:
     runs-on: windows-latest
@@ -36,12 +36,12 @@ jobs:
       - name: Package zip
         shell: pwsh
         run: |
-          $dir = "build/CassetteAutoMaster_artefacts/Release"
+          $dir = "build/Deck_artefacts/Release"
           $exe = Get-ChildItem -Path $dir -Filter "*.exe" -Recurse | Select-Object -First 1
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           Copy-Item $exe.FullName dist/
-          Compress-Archive -Path dist/* -DestinationPath CassetteAutoMaster-Windows.zip
+          Compress-Archive -Path dist/* -DestinationPath Deck-Windows.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: CassetteAutoMaster-Windows
-          path: CassetteAutoMaster-Windows.zip
+          name: Deck-Windows
+          path: Deck-Windows.zip

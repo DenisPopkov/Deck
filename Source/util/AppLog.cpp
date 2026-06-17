@@ -11,7 +11,7 @@ juce::CriticalSection logLock;
 juce::File logFilePath()
 {
     return juce::File::getSpecialLocation(juce::File::userDesktopDirectory)
-        .getChildFile("CassetteAutoMaster")
+        .getChildFile("Deck")
         .getChildFile("session.log");
 }
 
@@ -44,7 +44,7 @@ void initLogging()
 {
     juce::Logger::setCurrentLogger(&logger);
     logFilePath().deleteFile();
-    log("CassetteMaster logging started");
+    log("Deck logging started");
 }
 
 void log(const juce::String& message)

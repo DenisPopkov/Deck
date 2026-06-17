@@ -21,7 +21,7 @@ from round_app_icon import (  # noqa: E402
     pick_source,
 )
 
-ICONSET = Path("/tmp/CassetteAutoMaster.iconset")
+ICONSET = Path("/tmp/Deck.iconset")
 SIZES = (16, 32, 128, 256, 512)
 
 

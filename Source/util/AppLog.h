@@ -7,7 +7,7 @@ namespace cassette
 
 void initLogging();
 
-/** App log → stdout + ~/Desktop/CassetteAutoMaster/session.log */
+/** App log → stdout + ~/Desktop/Deck/session.log */
 void log(const juce::String& message);
 
 /** Log with elapsed milliseconds, e.g. logTiming("folder-scan", 1234.5, "track.wav"); */

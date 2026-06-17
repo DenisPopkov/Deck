@@ -54,7 +54,7 @@ static void sideFromVar(TapeSide& side, const juce::var& v)
 juce::File MixtapeProject::defaultProjectsFolder()
 {
     const auto dir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-                         .getChildFile("CassetteBurner")
+                         .getChildFile("Deck")
                          .getChildFile("projects");
     dir.createDirectory();
     return dir;

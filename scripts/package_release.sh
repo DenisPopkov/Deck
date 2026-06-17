@@ -17,11 +17,11 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release -DCASSETTE_BUILD_TESTS=ON
 cmake --build build --config Release -j"$(sysctl -n hw.ncpu 2>/dev/null || echo 4)"
 ctest --test-dir build --output-on-failure
 
-APP_NAME="CassetteMaster"
-APP_PATH="build/CassetteAutoMaster_artefacts/Release/${APP_NAME}.app"
+APP_NAME="Deck"
+APP_PATH="build/Deck_artefacts/Release/${APP_NAME}.app"
 if [[ ! -d "$APP_PATH" ]]; then
-  APP_PATH="build/CassetteAutoMaster_artefacts/Release/CassetteAutoMaster.app"
-  APP_NAME="CassetteAutoMaster"
+  APP_PATH="build/Deck_artefacts/Release/Deck.app"
+  APP_NAME="Deck"
 fi
 
 mkdir -p "$DIST/macOS"
@@ -30,7 +30,7 @@ cp -R "$APP_PATH" "$DIST/macOS/"
 
 bash "$ROOT/scripts/apply_app_icon.sh" "$APP_PATH"
 
-ZIP="$DIST/CassetteAutoMaster-${VERSION}-macOS.zip"
+ZIP="$DIST/Deck-${VERSION}-macOS.zip"
 rm -f "$ZIP"
 ditto -c -k --sequesterRsrc --keepParent "$DIST/macOS/${APP_NAME}.app" "$ZIP"
 

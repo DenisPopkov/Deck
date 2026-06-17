@@ -1,4 +1,4 @@
-# CassetteMaster
+# Deck
 
 macOS desktop app (C++ / JUCE) for preparing digital audio before cassette recording.
 
@@ -13,23 +13,23 @@ JUCE 8 is fetched automatically via CMake FetchContent.
 ## Build (macOS)
 
 ```bash
-git clone https://github.com/DenisPopkov/CassetteMaster.git
-cd CassetteAutoMaster
+git clone https://github.com/DenisPopkov/Deck.git
+cd Deck
 
 cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --target CassetteAutoMaster
+cmake --build build --target Deck
 ```
 
 The app bundle is created at:
 
 ```text
-build/CassetteAutoMaster_artefacts/Release/CassetteMaster.app
+build/Deck_artefacts/Release/Deck.app
 ```
 
 Open it:
 
 ```bash
-open build/CassetteAutoMaster_artefacts/Release/CassetteMaster.app
+open build/Deck_artefacts/Release/Deck.app
 ```
 
 On first launch, macOS may block an unsigned app: right-click the app → **Open**.
@@ -40,7 +40,7 @@ On first launch, macOS may block an unsigned app: right-click the app → **Open
 ./scripts/package_release.sh
 ```
 
-Output: `dist/macOS/CassetteMaster.app` and `dist/CassetteAutoMaster-0.2.0-macOS.zip`.
+Output: `dist/macOS/Deck.app` and `dist/Deck-0.2.0-macOS.zip`.
 
 ## Build (Windows)
 
@@ -57,7 +57,7 @@ Or use the helper script:
 .\scripts\build_windows_msvc.ps1
 ```
 
-The executable is under `build\CassetteAutoMaster_artefacts\Release\`.
+The executable is under `build\Deck_artefacts\Release\`.
 
 Pre-built Windows/macOS zips can also be downloaded from GitHub Actions (**Release builds** workflow).
 
@@ -67,14 +67,14 @@ Tests are enabled by default (`CASSETTE_BUILD_TESTS=ON`):
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --target CassetteAutoMasterTests
+cmake --build build --target DeckTests
 ctest --test-dir build --output-on-failure
 ```
 
 Or run directly:
 
 ```bash
-./build/CassetteAutoMasterTests
+./build/DeckTests
 ```
 
 ## CMake options

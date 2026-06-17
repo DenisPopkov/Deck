@@ -865,7 +865,7 @@ static void testOnnxStnRunnerMatchesGrid(TestContext& ctx)
 int main()
 {
     TestContext ctx;
-    std::cout << "CassetteAutoMaster DSP tests\n";
+    std::cout << "Deck DSP tests\n";
 
     testHotMasterTrimmedToProfileCap(ctx);
     testModerateMasterStaysNearSourceLoudness(ctx);
