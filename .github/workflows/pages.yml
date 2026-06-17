@@ -15,7 +15,26 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      app: ${{ steps.filter.outputs.app }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            app:
+              - 'Source/**'
+              - 'cmake/**'
+              - 'CMakeLists.txt'
+              - 'Assets/**'
+              - 'scripts/build_windows_msvc.ps1'
+
   build_windows:
+    needs: changes
+    if: needs.changes.outputs.app == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -42,7 +61,8 @@ jobs:
           retention-days: 14
 
   deploy:
-    needs: build_windows
+    needs: [changes, build_windows]
+    if: always() && !cancelled() && (needs.build_windows.result == 'success' || needs.build_windows.result == 'skipped')
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -50,11 +70,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Restore cached Windows package
+        uses: actions/cache/restore@v4
+        id: win_cache
+        with:
+          path: cached-downloads
+          key: deck-windows-latest
+          restore-keys: deck-windows-
+
       - name: Download Windows package
+        if: needs.build_windows.result == 'success'
         uses: actions/download-artifact@v4
         with:
           name: Deck-Windows-pages
-          path: page-build/downloads
+          path: fresh-downloads
+
+      - name: Update Windows package cache
+        if: needs.build_windows.result == 'success'
+        run: |
+          rm -rf cached-downloads
+          mkdir -p cached-downloads
+          cp fresh-downloads/Deck-Windows-latest.zip cached-downloads/
+
+      - uses: actions/cache/save@v4
+        if: needs.build_windows.result == 'success'
+        with:
+          path: cached-downloads
+          key: deck-windows-latest
 
       - name: Prepare Pages content
         run: |
@@ -62,7 +104,11 @@ jobs:
           mkdir -p page-build/site
           cp -R docs/. page-build/site/
           mkdir -p page-build/site/downloads
-          cp page-build/downloads/Deck-Windows-latest.zip page-build/site/downloads/Deck-Windows-latest.zip
+          if [ -f fresh-downloads/Deck-Windows-latest.zip ]; then
+            cp fresh-downloads/Deck-Windows-latest.zip page-build/site/downloads/Deck-Windows-latest.zip
+          elif [ -f cached-downloads/Deck-Windows-latest.zip ]; then
+            cp cached-downloads/Deck-Windows-latest.zip page-build/site/downloads/Deck-Windows-latest.zip
+          fi
 
       - uses: actions/upload-pages-artifact@v3
         with:
