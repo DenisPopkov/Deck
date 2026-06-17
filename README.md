@@ -1,33 +1,39 @@
 # Deck
 
+[Русский](#русский) | [English](#english)
+
+---
+
+## Русский
+
 **Deck** — настольное приложение (C++ / JUCE) для подготовки цифрового аудио перед записью на кассету: микстейпы, адаптивный мастеринг под тип ленты и экспорт WAV, готового к записи.
 
-**Сайт проекта:** [denispopkov.github.io/Deck](https://denispopkov.github.io/Deck/) — описание, скриншоты, FAQ и ссылки на скачивание для macOS и Windows.
+**Сайт проекта:** [denispopkov.github.io/Deck](https://denispopkov.github.io/Deck/) — описание, скриншоты, FAQ и ссылки на скачивание для MacOS и Windows.
 
-## Возможности
+### Возможности
 
-- **Импорт и подготовка** — перетащите файл или папку, нажмите **Prepare**: адаптивный мастеринг и предпросмотр «до / после».
+- **Импорт и подготовка** — перетащите файл или папку, нажмите **Prepare**: адаптивный мастеринг и предпросмотр "до / после".
 - **Настройка ленты** — Type I, II или IV; C60, C90, C120 или произвольная длина.
-- **Сборка микстейпа** — распределение треков по сторонам A и B, порядок, проверка, что всё помещается на ленту.
-- **Экспорт** — true-peak лимитирование, EQ с учётом кассеты, опциональные тестовые тоны; на выходе WAV для записи на деку.
+- **Сборка микстейпа** — распределение треков по сторонам A и B, порядок, проверка, что все помещается на ленту.
+- **Экспорт** — true-peak лимитирование, EQ с учетом кассеты, опциональные тестовые тоны; на выходе WAV для записи на деку.
 
 Поддерживаемые форматы импорта: WAV, FLAC, AIFF, OGG. Экспорт — WAV. DAW не нужен.
 
-## Скачать
+### Скачать
 
 Готовые сборки — на [сайте проекта](https://denispopkov.github.io/Deck/#download) или в [релизах GitHub](https://github.com/DenisPopkov/Deck/releases/latest).
 
-При первом запуске на macOS система может заблокировать неподписанное приложение: щёлкните правой кнопкой по **Deck.app** → **Открыть**.
+При первом запуске на MacOS система может заблокировать неподписанное приложение: щелкните правой кнопкой по **Deck.app** -> **Открыть**.
 
-## Требования для сборки
+### Требования для сборки
 
-- **macOS:** Xcode Command Line Tools, CMake 3.22+
-- **Windows:** Visual Studio 2022 с рабочей нагрузкой «Разработка классических приложений на C++» (JUCE 8 не поддерживает MinGW)
+- **MacOS:** Xcode Command Line Tools, CMake 3.22+
+- **Windows:** Visual Studio 2022 с рабочей нагрузкой "Разработка классических приложений на C++" (JUCE 8 не поддерживает MinGW)
 - **Опционально:** пакеты Homebrew для дополнительных возможностей (см. ниже)
 
 JUCE 8 подтягивается автоматически через CMake FetchContent.
 
-## Сборка (macOS)
+### Сборка (MacOS)
 
 ```bash
 git clone https://github.com/DenisPopkov/Deck.git
@@ -49,7 +55,7 @@ build/Deck_artefacts/Release/Deck.app
 open build/Deck_artefacts/Release/Deck.app
 ```
 
-### Релизный пакет (macOS)
+#### Релизный пакет (MacOS)
 
 ```bash
 ./scripts/package_release.sh
@@ -57,7 +63,7 @@ open build/Deck_artefacts/Release/Deck.app
 
 Результат: `dist/macOS/Deck.app` и `dist/Deck-0.2.0-macOS.zip`.
 
-## Сборка (Windows)
+### Сборка (Windows)
 
 На машине с Visual Studio 2022:
 
@@ -74,9 +80,9 @@ cmake --build build --config Release
 
 Исполняемый файл: `build\Deck_artefacts\Release\`.
 
-Готовые архивы для Windows и macOS также публикуются в GitHub Actions (workflow **Release builds**).
+Готовые архивы для Windows и MacOS также публикуются в GitHub Actions (workflow **Release builds**).
 
-## Тесты
+### Тесты
 
 Тесты включены по умолчанию (`CASSETTE_BUILD_TESTS=ON`):
 
@@ -92,7 +98,7 @@ ctest --test-dir build --output-on-failure
 ./build/DeckTests
 ```
 
-## Опции CMake
+### Опции CMake
 
 | Опция | По умолчанию | Описание |
 |--------|--------------|----------|
@@ -113,7 +119,7 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release \
 cmake --build build
 ```
 
-### Модель ONNX (опционально)
+#### Модель ONNX (опционально)
 
 При включении `CASSETTE_BUILD_ONNX` положите модель в `models/tape_stn.onnx` или экспортируйте:
 
@@ -122,9 +128,9 @@ pip install torch onnx onnxscript onnxruntime
 python scripts/export_stn_onnx.py
 ```
 
-При наличии модели сборка копирует её в бандл приложения (`scripts/copy_stn_onnx_if_present.sh`).
+При наличии модели сборка копирует ее в бандл приложения (`scripts/copy_stn_onnx_if_present.sh`).
 
-## Структура проекта
+### Структура проекта
 
 ```text
 Source/          Код приложения и DSP
@@ -136,6 +142,150 @@ docs/            Сайт на GitHub Pages
 Assets/          Иконка приложения
 ```
 
-## Лицензия
+### Лицензия
 
 Инженерный прототип. Сторонние зависимости (JUCE и опциональные библиотеки) распространяются на своих условиях.
+
+---
+
+## English
+
+**Deck** is a desktop app (C++ / JUCE) for preparing digital audio before recording to cassette: mixtape workflow, tape-aware adaptive mastering, and WAV export ready for recording.
+
+**Project website:** [denispopkov.github.io/Deck](https://denispopkov.github.io/Deck/) — overview, screenshots, FAQ, and download links for MacOS and Windows.
+
+### Features
+
+- **Import and prepare** — drag a file or folder, press **Prepare**: adaptive mastering with before/after preview.
+- **Tape setup** — Type I, II, or IV; C60, C90, C120, or custom duration.
+- **Mixtape building** — split tracks across Side A and B, reorder tracks, and check cassette fit.
+- **Export** — true-peak limiting, cassette-aware EQ, optional preflight tones; output is WAV for deck recording.
+
+Supported input formats: WAV, FLAC, AIFF, OGG. Export format: WAV. No DAW required.
+
+### Download
+
+Prebuilt binaries are available on the [project website](https://denispopkov.github.io/Deck/#download) and in [GitHub releases](https://github.com/DenisPopkov/Deck/releases/latest).
+
+On first launch on MacOS, the system may block an unsigned app: right-click **Deck.app** -> **Open**.
+
+### Build requirements
+
+- **MacOS:** Xcode Command Line Tools, CMake 3.22+
+- **Windows:** Visual Studio 2022 with the "Desktop development with C++" workload (JUCE 8 does not support MinGW)
+- **Optional:** Homebrew packages for extra features (see below)
+
+JUCE 8 is fetched automatically via CMake FetchContent.
+
+### Build (MacOS)
+
+```bash
+git clone https://github.com/DenisPopkov/Deck.git
+cd Deck
+
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target Deck
+```
+
+Built app:
+
+```text
+build/Deck_artefacts/Release/Deck.app
+```
+
+Run:
+
+```bash
+open build/Deck_artefacts/Release/Deck.app
+```
+
+#### Release package (MacOS)
+
+```bash
+./scripts/package_release.sh
+```
+
+Output: `dist/macOS/Deck.app` and `dist/Deck-0.2.0-macOS.zip`.
+
+### Build (Windows)
+
+From a machine with Visual Studio 2022:
+
+```powershell
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release
+```
+
+Or use the helper script:
+
+```powershell
+.\scripts\build_windows_msvc.ps1
+```
+
+Executable path: `build\Deck_artefacts\Release\`.
+
+Prebuilt Windows and MacOS archives are also published in GitHub Actions (**Release builds** workflow).
+
+### Tests
+
+Tests are enabled by default (`CASSETTE_BUILD_TESTS=ON`):
+
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target DeckTests
+ctest --test-dir build --output-on-failure
+```
+
+Or run directly:
+
+```bash
+./build/DeckTests
+```
+
+### CMake options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `CASSETTE_BUILD_TESTS` | ON | Mastering adequacy test suite |
+| `CASSETTE_BUILD_GSTPEAQ` | ON | Runtime PEAQ/ODG via GStreamer (requires `gstreamer`) |
+| `CASSETTE_BUILD_ONNX` | OFF | ONNX Runtime STN saturation model |
+| `CASSETTE_BUILD_ESSENTIA` | OFF | Essentia for offline analysis |
+| `CASSETTE_BUILD_RUBBERBAND` | OFF | Rubber Band wow/flutter |
+| `CASSETTE_BUILD_PLUGIN` | OFF | VST3/AU target |
+| `CASSETTE_BUILD_BURNER` | OFF | CassetteBurner timeline app |
+
+Example with optional dependencies (Homebrew on Apple Silicon):
+
+```bash
+brew install onnxruntime
+cmake -B build -DCMAKE_BUILD_TYPE=Release \
+  -DCASSETTE_BUILD_ONNX=ON
+cmake --build build
+```
+
+#### ONNX model (optional)
+
+If `CASSETTE_BUILD_ONNX` is enabled, place a model at `models/tape_stn.onnx` or export one:
+
+```bash
+pip install torch onnx onnxscript onnxruntime
+python scripts/export_stn_onnx.py
+```
+
+When present, the build copies the model into the app bundle (`scripts/copy_stn_onnx_if_present.sh`).
+
+### Project layout
+
+```text
+Source/          Application and DSP code
+cmake/           Core CMake helpers
+Tests/           Offline mastering tests
+Tools/           CLI utilities (AnalyzeExport, RenderCompare)
+scripts/         Build and packaging scripts
+docs/            GitHub Pages site
+Assets/          App icon
+```
+
+### License
+
+Engineering prototype. Third-party dependencies (JUCE and optional libraries) are distributed under their own licenses.
