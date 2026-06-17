@@ -23,7 +23,6 @@
         <li><a href="#faq" data-i18n="nav.faq">FAQ</a></li>
       </ul>
       <div class="nav-actions">
-        <button class="lang-toggle" id="langToggle" type="button" aria-label="Switch language">RU / EN</button>
         <a class="btn btn-primary btn-small" href="#download" data-i18n="btn.download">Download</a>
       </div>
     </div>
@@ -330,16 +329,8 @@
         return locale.startsWith("ru") ? "ru" : "en";
       }
 
-      let currentLang = detectLanguage();
+      const currentLang = detectLanguage();
       applyLanguage(currentLang);
-
-      const toggle = document.getElementById("langToggle");
-      if (toggle) {
-        toggle.addEventListener("click", function () {
-          currentLang = currentLang === "ru" ? "en" : "ru";
-          applyLanguage(currentLang);
-        });
-      }
     })();
   </script>
 
