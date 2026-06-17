@@ -8,7 +8,7 @@
 
 **Deck** — настольное приложение (C++ / JUCE) для подготовки цифрового аудио перед записью на кассету: микстейпы, адаптивный мастеринг под тип ленты и экспорт WAV, готового к записи.
 
-**Сайт проекта:** [denispopkov.github.io/Deck](https://denispopkov.github.io/Deck/) — описание, скриншоты, FAQ и ссылки на скачивание для MacOS и Windows.
+**Сайт проекта:** [denispopkov.github.io/Deck](https://denispopkov.github.io/Deck/) — описание, скриншоты, FAQ и ссылки на скачивание для MacOS, Windows и Linux.
 
 ### Возможности
 
@@ -115,6 +115,8 @@ make package
 
 Подробная инструкция: [`scripts/BUILD-LINUX.md`](scripts/BUILD-LINUX.md).
 
+Готовый Linux-архив на GitHub Pages: [denispopkov.github.io/Deck/downloads/Deck-Linux-latest.tar.gz](https://denispopkov.github.io/Deck/downloads/Deck-Linux-latest.tar.gz).
+
 ### Тесты
 
 Тесты включены по умолчанию (`CASSETTE_BUILD_TESTS=ON`):
@@ -185,7 +187,7 @@ Assets/          Иконка приложения
 
 **Deck** is a desktop app (C++ / JUCE) for preparing digital audio before recording to cassette: mixtape workflow, tape-aware adaptive mastering, and WAV export ready for recording.
 
-**Project website:** [denispopkov.github.io/Deck](https://denispopkov.github.io/Deck/) — overview, screenshots, FAQ, and download links for MacOS, Windows, and Linux (build from source).
+**Project website:** [denispopkov.github.io/Deck](https://denispopkov.github.io/Deck/) — overview, screenshots, FAQ, and download links for MacOS, Windows, and Linux.
 
 ### Features
 
@@ -291,6 +293,8 @@ make package
 ```
 
 Full guide: [`scripts/BUILD-LINUX.md`](scripts/BUILD-LINUX.md).
+
+Prebuilt Linux tarball on GitHub Pages: [denispopkov.github.io/Deck/downloads/Deck-Linux-latest.tar.gz](https://denispopkov.github.io/Deck/downloads/Deck-Linux-latest.tar.gz).
 
 ### Tests
 
