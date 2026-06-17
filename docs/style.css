@@ -120,6 +120,28 @@ code {
   color: var(--text);
 }
 
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lang-toggle {
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+
+.lang-toggle:hover {
+  border-color: var(--border);
+}
+
 /* Buttons */
 
 .btn {
@@ -590,6 +612,14 @@ section {
 @media (max-width: 800px) {
   .nav-links {
     display: none;
+  }
+
+  .nav-actions {
+    gap: 8px;
+  }
+
+  .lang-toggle {
+    padding: 7px 8px;
   }
 
   .feature-grid {

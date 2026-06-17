@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Deck — Prepare audio for cassette recording</title>
-  <meta name="description" content="Deck is a desktop app for cassette-aware mastering. Import tracks, choose tape type and length, preview before &amp; after, export WAV ready to record.">
+  <meta name="description" content="Deck is a desktop app for cassette-aware mastering. Import tracks, choose tape type and length, preview before and after, export WAV ready to record.">
   <meta name="theme-color" content="#e85500">
   <link rel="icon" href="assets/app-icon.png" type="image/png">
   <link rel="stylesheet" href="style.css">
@@ -18,11 +18,14 @@
         Deck
       </a>
       <ul class="nav-links">
-        <li><a href="#features">Features</a></li>
-        <li><a href="#platforms">Platforms</a></li>
-        <li><a href="#faq">FAQ</a></li>
+        <li><a href="#features" data-i18n="nav.features">Features</a></li>
+        <li><a href="#platforms" data-i18n="nav.platforms">Platforms</a></li>
+        <li><a href="#faq" data-i18n="nav.faq">FAQ</a></li>
       </ul>
-      <a class="btn btn-primary btn-small" href="#download">Download</a>
+      <div class="nav-actions">
+        <button class="lang-toggle" id="langToggle" type="button" aria-label="Switch language">RU / EN</button>
+        <a class="btn btn-primary btn-small" href="#download" data-i18n="btn.download">Download</a>
+      </div>
     </div>
   </header>
 
@@ -32,15 +35,15 @@
       <div class="container">
         <img class="hero-icon" src="assets/app-icon.png" alt="Deck app icon" width="96" height="96">
         <h1>Deck</h1>
-        <p class="tagline">Prepare digital audio for cassette recording</p>
-        <p class="lead">
+        <p class="tagline" data-i18n="hero.tagline">Prepare digital audio for cassette recording</p>
+        <p class="lead" data-i18n="hero.lead">
           Adaptive mastering tuned for Type I, II, and IV tape. Build mixtapes from folders,
           preview before and after, and export WAV files ready to hit record.
         </p>
         <div class="hero-cta">
-          <a class="btn btn-primary" href="#download">Download Deck</a>
+          <a class="btn btn-primary" href="#download" data-i18n="btn.downloadDeck">Download Deck</a>
         </div>
-        <p class="hero-meta">MacOS &amp; Windows · No DAW required</p>
+        <p class="hero-meta" data-i18n="hero.meta">MacOS &amp; Windows · No DAW required</p>
         <figure class="hero-shot">
           <img src="assets/macbook.png" alt="Deck on MacBook — mixtape editor with Side A and Side B track lists" width="11838" height="7305" loading="eager">
         </figure>
@@ -49,9 +52,9 @@
 
     <section class="panel" id="about">
       <div class="container">
-        <span class="section-label">What is Deck</span>
-        <h2 class="section-title">From digital files to cassette-ready WAV</h2>
-        <p class="section-intro">
+        <span class="section-label" data-i18n="about.label">What is Deck</span>
+        <h2 class="section-title" data-i18n="about.title">From digital files to cassette-ready WAV</h2>
+        <p class="section-intro" data-i18n="about.intro">
           Deck is a desktop app built for people who still love the ritual of recording to tape.
           Pick your formulation and tape length, drop in a track or a whole folder, and let Deck
           handle loudness, EQ, and headroom so your music survives the transfer to analog.
@@ -59,15 +62,15 @@
         <div class="stats">
           <div class="stat-card">
             <strong>3</strong>
-            <span>Tape formulations — Type I, II, IV</span>
+            <span data-i18n="stats.tape">Tape formulations — Type I, II, IV</span>
           </div>
           <div class="stat-card">
             <strong>4</strong>
-            <span>Workflow steps — import, setup, prepare, export</span>
+            <span data-i18n="stats.workflow">Workflow steps — import, setup, prepare, export</span>
           </div>
           <div class="stat-card">
             <strong>5</strong>
-            <span>Audio formats — WAV, FLAC, AIFF, OGG</span>
+            <span data-i18n="stats.formats">Audio formats — WAV, FLAC, AIFF, OGG</span>
           </div>
         </div>
       </div>
@@ -75,25 +78,25 @@
 
     <section id="features">
       <div class="container">
-        <span class="section-label">Features</span>
-        <h2 class="section-title">Everything you need before you hit record</h2>
+        <span class="section-label" data-i18n="features.label">Features</span>
+        <h2 class="section-title" data-i18n="features.title">Everything you need before you hit record</h2>
 
         <div class="feature-grid">
           <article class="feature-card">
-            <h3>Drop &amp; prepare</h3>
-            <p>Drag a file or import a folder, then one-click <strong>Prepare</strong> with adaptive mastering and before/after preview.</p>
+            <h3 data-i18n="features.card1.title">Drop &amp; prepare</h3>
+            <p data-i18n="features.card1.text">Drag a file or import a folder, then one-click <strong>Prepare</strong> with adaptive mastering and before/after preview.</p>
           </article>
           <article class="feature-card">
-            <h3>Tape setup</h3>
-            <p>Type I, II, or IV — C60, C90, C120 or custom length. Processing follows your blank tape and deck.</p>
+            <h3 data-i18n="features.card2.title">Tape setup</h3>
+            <p data-i18n="features.card2.text">Type I, II, or IV — C60, C90, C120 or custom length. Processing follows your blank tape and deck.</p>
           </article>
           <article class="feature-card">
-            <h3>Mixtape builder</h3>
-            <p>Split tracks across Side A and Side B, reorder the lineup, and check fit before you master.</p>
+            <h3 data-i18n="features.card3.title">Mixtape builder</h3>
+            <p data-i18n="features.card3.text">Split tracks across Side A and Side B, reorder the lineup, and check fit before you master.</p>
           </article>
           <article class="feature-card">
-            <h3>Export ready</h3>
-            <p>True-peak limiting, cassette-aware EQ, optional preflight tones — export WAV and hit record.</p>
+            <h3 data-i18n="features.card4.title">Export ready</h3>
+            <p data-i18n="features.card4.text">True-peak limiting, cassette-aware EQ, optional preflight tones — export WAV and hit record.</p>
           </article>
         </div>
       </div>
@@ -101,27 +104,27 @@
 
     <section class="panel" id="platforms">
       <div class="container">
-        <span class="section-label">Platforms</span>
-        <h2 class="section-title">Where Deck runs</h2>
-        <p class="section-intro">Available for Mac and PC.</p>
+        <span class="section-label" data-i18n="platforms.label">Platforms</span>
+        <h2 class="section-title" data-i18n="platforms.title">Where Deck runs</h2>
+        <p class="section-intro" data-i18n="platforms.intro">Available for Mac and PC.</p>
         <table class="compat-table">
           <thead>
             <tr>
-              <th>Platform</th>
-              <th>Status</th>
-              <th>Requirements</th>
+              <th data-i18n="platforms.table.platform">Platform</th>
+              <th data-i18n="platforms.table.status">Status</th>
+              <th data-i18n="platforms.table.requirements">Requirements</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td><strong>MacOS</strong></td>
-              <td><span class="badge badge-ok">Available</span></td>
-              <td>MacOS 12+ · Apple Silicon or Intel</td>
+              <td><strong data-i18n="platforms.macos.name">MacOS</strong></td>
+              <td><span class="badge badge-ok" data-i18n="platforms.available">Available</span></td>
+              <td data-i18n="platforms.macos.req">MacOS 12+ · Apple Silicon or Intel</td>
             </tr>
             <tr>
-              <td><strong>Windows</strong></td>
-              <td><span class="badge badge-ok">Available</span></td>
-              <td>Windows 10/11</td>
+              <td><strong data-i18n="platforms.windows.name">Windows</strong></td>
+              <td><span class="badge badge-ok" data-i18n="platforms.available">Available</span></td>
+              <td data-i18n="platforms.windows.req">Windows 10/11</td>
             </tr>
           </tbody>
         </table>
@@ -131,11 +134,11 @@
     <section id="download">
       <div class="container">
         <div class="download-cta">
-          <h2>Download Deck</h2>
-          <p>Choose your platform and install the app.</p>
+          <h2 data-i18n="download.title">Download Deck</h2>
+          <p data-i18n="download.text">Choose your platform and install the app.</p>
           <div class="download-buttons">
-            <a class="btn btn-primary" href="https://github.com/DenisPopkov/Deck/releases/latest">MacOS</a>
-            <a class="btn btn-primary" href="https://github.com/DenisPopkov/Deck/releases/latest/download/Deck-Windows.zip">Windows</a>
+            <a class="btn btn-primary" href="https://github.com/DenisPopkov/Deck/releases/latest" data-i18n="download.macos">MacOS</a>
+            <a class="btn btn-primary" href="https://github.com/DenisPopkov/Deck/releases/latest/download/Deck-Windows.zip" data-i18n="download.windows">Windows</a>
           </div>
         </div>
       </div>
@@ -144,41 +147,41 @@
     <section id="faq">
       <div class="container">
         <span class="section-label">FAQ</span>
-        <h2 class="section-title">Common questions</h2>
+        <h2 class="section-title" data-i18n="faq.title">Common questions</h2>
         <div class="faq-list">
 
           <details class="faq-item">
-            <summary>Do I need a DAW or plugin host?</summary>
+            <summary data-i18n="faq.q1">Do I need a DAW or plugin host?</summary>
             <div class="faq-answer">
-              <p>No. Deck is a standalone desktop application. Import audio, prepare it, and export WAV — all in one window.</p>
+              <p data-i18n="faq.a1">No. Deck is a standalone desktop application. Import audio, prepare it, and export WAV — all in one window.</p>
             </div>
           </details>
 
           <details class="faq-item">
-            <summary>Which audio formats can I import?</summary>
+            <summary data-i18n="faq.q2">Which audio formats can I import?</summary>
             <div class="faq-answer">
-              <p>WAV, FLAC, AIFF, and OGG. Export is WAV.</p>
+              <p data-i18n="faq.a2">WAV, FLAC, AIFF, and OGG. Export is WAV.</p>
             </div>
           </details>
 
           <details class="faq-item">
-            <summary>MacOS says the app is from an unidentified developer</summary>
+            <summary data-i18n="faq.q3">MacOS says the app is from an unidentified developer</summary>
             <div class="faq-answer">
-              <p>Release builds are not notarized yet. Right-click <strong>Deck.app</strong> → <strong>Open</strong>, then confirm. You only need to do this once.</p>
+              <p data-i18n="faq.a3">Release builds are not notarized yet. Right-click <strong>Deck.app</strong> → <strong>Open</strong>, then confirm. You only need to do this once.</p>
             </div>
           </details>
 
           <details class="faq-item">
-            <summary>How is this different from normal mastering?</summary>
+            <summary data-i18n="faq.q4">How is this different from normal mastering?</summary>
             <div class="faq-answer">
-              <p>Deck targets cassette transfer: tape formulation profiles, HF headroom, true-peak limiting, and optional tape-aware saturation — so your digital master survives recording to analog and playback on a deck or walkman.</p>
+              <p data-i18n="faq.a4">Deck targets cassette transfer: tape formulation profiles, HF headroom, true-peak limiting, and optional tape-aware saturation — so your digital master survives recording to analog and playback on a deck or walkman.</p>
             </div>
           </details>
 
           <details class="faq-item">
-            <summary>Can I build a full mixtape from a folder?</summary>
+            <summary data-i18n="faq.q5">Can I build a full mixtape from a folder?</summary>
             <div class="faq-answer">
-              <p>Yes. Import a folder, arrange tracks in the editor, check whether everything fits your tape length, then prepare and export.</p>
+              <p data-i18n="faq.a5">Yes. Import a folder, arrange tracks in the editor, check whether everything fits your tape length, then prepare and export.</p>
             </div>
           </details>
 
@@ -190,9 +193,155 @@
 
   <footer class="site-footer">
     <div class="container">
-      <p>Deck — prepare audio for cassette recording</p>
+      <p data-i18n="footer.text">Deck — prepare audio for cassette recording</p>
     </div>
   </footer>
+
+  <script>
+    (function () {
+      const i18n = {
+        en: {
+          "nav.features": "Features",
+          "nav.platforms": "Platforms",
+          "nav.faq": "FAQ",
+          "btn.download": "Download",
+          "btn.downloadDeck": "Download Deck",
+          "hero.tagline": "Prepare digital audio for cassette recording",
+          "hero.lead": "Adaptive mastering tuned for Type I, II, and IV tape. Build mixtapes from folders, preview before and after, and export WAV files ready to hit record.",
+          "hero.meta": "MacOS & Windows · No DAW required",
+          "about.label": "What is Deck",
+          "about.title": "From digital files to cassette-ready WAV",
+          "about.intro": "Deck is a desktop app built for people who still love the ritual of recording to tape. Pick your formulation and tape length, drop in a track or a whole folder, and let Deck handle loudness, EQ, and headroom so your music survives the transfer to analog.",
+          "stats.tape": "Tape formulations — Type I, II, IV",
+          "stats.workflow": "Workflow steps — import, setup, prepare, export",
+          "stats.formats": "Audio formats — WAV, FLAC, AIFF, OGG",
+          "features.label": "Features",
+          "features.title": "Everything you need before you hit record",
+          "features.card1.title": "Drop & prepare",
+          "features.card1.text": "Drag a file or import a folder, then one-click <strong>Prepare</strong> with adaptive mastering and before/after preview.",
+          "features.card2.title": "Tape setup",
+          "features.card2.text": "Type I, II, or IV — C60, C90, C120 or custom length. Processing follows your blank tape and deck.",
+          "features.card3.title": "Mixtape builder",
+          "features.card3.text": "Split tracks across Side A and Side B, reorder the lineup, and check fit before you master.",
+          "features.card4.title": "Export ready",
+          "features.card4.text": "True-peak limiting, cassette-aware EQ, optional preflight tones — export WAV and hit record.",
+          "platforms.label": "Platforms",
+          "platforms.title": "Where Deck runs",
+          "platforms.intro": "Available for Mac and PC.",
+          "platforms.table.platform": "Platform",
+          "platforms.table.status": "Status",
+          "platforms.table.requirements": "Requirements",
+          "platforms.macos.name": "MacOS",
+          "platforms.windows.name": "Windows",
+          "platforms.available": "Available",
+          "platforms.macos.req": "MacOS 12+ · Apple Silicon or Intel",
+          "platforms.windows.req": "Windows 10/11",
+          "download.title": "Download Deck",
+          "download.text": "Choose your platform and install the app.",
+          "download.macos": "MacOS",
+          "download.windows": "Windows",
+          "faq.title": "Common questions",
+          "faq.q1": "Do I need a DAW or plugin host?",
+          "faq.a1": "No. Deck is a standalone desktop application. Import audio, prepare it, and export WAV — all in one window.",
+          "faq.q2": "Which audio formats can I import?",
+          "faq.a2": "WAV, FLAC, AIFF, and OGG. Export is WAV.",
+          "faq.q3": "MacOS says the app is from an unidentified developer",
+          "faq.a3": "Release builds are not notarized yet. Right-click <strong>Deck.app</strong> → <strong>Open</strong>, then confirm. You only need to do this once.",
+          "faq.q4": "How is this different from normal mastering?",
+          "faq.a4": "Deck targets cassette transfer: tape formulation profiles, HF headroom, true-peak limiting, and optional tape-aware saturation — so your digital master survives recording to analog and playback on a deck or walkman.",
+          "faq.q5": "Can I build a full mixtape from a folder?",
+          "faq.a5": "Yes. Import a folder, arrange tracks in the editor, check whether everything fits your tape length, then prepare and export.",
+          "footer.text": "Deck — prepare audio for cassette recording"
+        },
+        ru: {
+          "nav.features": "Возможности",
+          "nav.platforms": "Платформы",
+          "nav.faq": "FAQ",
+          "btn.download": "Скачать",
+          "btn.downloadDeck": "Скачать Deck",
+          "hero.tagline": "Подготовка цифрового аудио для записи на кассету",
+          "hero.lead": "Адаптивный мастеринг под ленту Type I, II и IV. Собирайте микстейпы из папок, слушайте до и после обработки и экспортируйте WAV, готовый к записи.",
+          "hero.meta": "MacOS и Windows · Без DAW",
+          "about.label": "Что такое Deck",
+          "about.title": "От цифровых файлов к WAV для кассеты",
+          "about.intro": "Deck — это десктопное приложение для тех, кто любит ритуал записи на кассету. Выберите тип ленты и длительность, добавьте трек или целую папку, а Deck настроит loudness, EQ и headroom, чтобы музыка корректно легла на аналог.",
+          "stats.tape": "Типы лент — Type I, II, IV",
+          "stats.workflow": "Шагов в процессе — импорт, настройка, подготовка, экспорт",
+          "stats.formats": "Форматы аудио — WAV, FLAC, AIFF, OGG",
+          "features.label": "Возможности",
+          "features.title": "Все, что нужно перед нажатием Record",
+          "features.card1.title": "Импорт и подготовка",
+          "features.card1.text": "Перетащите файл или импортируйте папку, затем в один клик <strong>Prepare</strong> с адаптивным мастерингом и сравнением до/после.",
+          "features.card2.title": "Настройка ленты",
+          "features.card2.text": "Type I, II или IV — C60, C90, C120 или своя длительность. Обработка подстраивается под вашу ленту и деку.",
+          "features.card3.title": "Mixtape Builder",
+          "features.card3.text": "Разложите треки по Side A и Side B, поменяйте порядок и проверьте, помещается ли все до мастеринга.",
+          "features.card4.title": "Готово к экспорту",
+          "features.card4.text": "True-peak лимитер, cassette-aware EQ, опциональные preflight-тоны — экспортируйте WAV и записывайте.",
+          "platforms.label": "Платформы",
+          "platforms.title": "Где работает Deck",
+          "platforms.intro": "Доступно для Mac и PC.",
+          "platforms.table.platform": "Платформа",
+          "platforms.table.status": "Статус",
+          "platforms.table.requirements": "Требования",
+          "platforms.macos.name": "MacOS",
+          "platforms.windows.name": "Windows",
+          "platforms.available": "Доступно",
+          "platforms.macos.req": "MacOS 12+ · Apple Silicon или Intel",
+          "platforms.windows.req": "Windows 10/11",
+          "download.title": "Скачать Deck",
+          "download.text": "Выберите платформу и установите приложение.",
+          "download.macos": "MacOS",
+          "download.windows": "Windows",
+          "faq.title": "Частые вопросы",
+          "faq.q1": "Нужен ли DAW или плагин-хост?",
+          "faq.a1": "Нет. Deck — это отдельное десктопное приложение. Импортируете аудио, подготавливаете и экспортируете WAV в одном окне.",
+          "faq.q2": "Какие форматы можно импортировать?",
+          "faq.a2": "WAV, FLAC, AIFF и OGG. Экспорт — в WAV.",
+          "faq.q3": "MacOS пишет, что приложение от неизвестного разработчика",
+          "faq.a3": "Релизные сборки пока без notarization. Нажмите правой кнопкой на <strong>Deck.app</strong> → <strong>Open</strong>, затем подтвердите. Обычно это нужно сделать один раз.",
+          "faq.q4": "Чем это отличается от обычного мастеринга?",
+          "faq.a4": "Deck ориентирован на кассетный перенос: профили типа ленты, HF headroom, true-peak лимитирование и опциональная tape-aware сатурация — чтобы мастер корректно звучал после записи на аналог.",
+          "faq.q5": "Можно собрать целый микстейп из папки?",
+          "faq.a5": "Да. Импортируйте папку, разложите треки в редакторе, проверьте длину под кассету, затем подготовьте и экспортируйте.",
+          "footer.text": "Deck — подготовка аудио для записи на кассету"
+        }
+      };
+
+      function applyLanguage(lang) {
+        const dict = i18n[lang] || i18n.en;
+        document.documentElement.lang = lang;
+        localStorage.setItem("deck_lang", lang);
+        const nodes = document.querySelectorAll("[data-i18n]");
+        nodes.forEach((node) => {
+          const key = node.getAttribute("data-i18n");
+          if (dict[key]) {
+            node.innerHTML = dict[key];
+          }
+        });
+      }
+
+      function detectLanguage() {
+        const saved = localStorage.getItem("deck_lang");
+        if (saved === "ru" || saved === "en") {
+          return saved;
+        }
+        const locale = (navigator.language || "en").toLowerCase();
+        return locale.startsWith("ru") ? "ru" : "en";
+      }
+
+      let currentLang = detectLanguage();
+      applyLanguage(currentLang);
+
+      const toggle = document.getElementById("langToggle");
+      if (toggle) {
+        toggle.addEventListener("click", function () {
+          currentLang = currentLang === "ru" ? "en" : "ru";
+          applyLanguage(currentLang);
+        });
+      }
+    })();
+  </script>
 
 </body>
 </html>
