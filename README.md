@@ -22,6 +22,9 @@
 ### Скачать
 
 Готовые сборки — на [сайте проекта](https://denispopkov.github.io/Deck/#download) или в [релизах GitHub](https://github.com/DenisPopkov/Deck/releases/latest).
+Актуальная nightly-сборка Windows также доступна:
+- как artifact в GitHub Actions workflow **Windows build**;
+- по прямой ссылке в GitHub Pages: [denispopkov.github.io/Deck/downloads/Deck-Windows-latest.zip](https://denispopkov.github.io/Deck/downloads/Deck-Windows-latest.zip).
 
 При первом запуске на MacOS система может заблокировать неподписанное приложение: щелкните правой кнопкой по **Deck.app** -> **Открыть**.
 
@@ -72,6 +75,8 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
 ```
 
+Для CI и локальной сборки используется **MSVC** (Visual Studio toolchain), так как JUCE 8 официально не поддерживает MinGW.
+
 Или вспомогательный скрипт:
 
 ```powershell
@@ -80,7 +85,20 @@ cmake --build build --config Release
 
 Исполняемый файл: `build\Deck_artefacts\Release\`.
 
-Готовые архивы для Windows и MacOS также публикуются в GitHub Actions (workflow **Release builds**).
+Готовые архивы для Windows и MacOS также публикуются в GitHub Actions (workflow **Release builds** на тегах).
+На каждом push/pull request в `main`/`master` Windows-архив публикуется как artifact в workflow **Windows build**.
+На push в `main`/`master` тот же актуальный Windows-архив выкладывается в GitHub Pages:
+`https://denispopkov.github.io/Deck/downloads/Deck-Windows-latest.zip`.
+
+#### Локально повторить Windows-сборку (как в CI)
+
+```powershell
+git clone https://github.com/DenisPopkov/Deck.git
+cd Deck
+.\scripts\build_windows_msvc.ps1
+```
+
+Проверка: архив должен появиться в `dist\Deck-0.2.0-Windows.zip`.
 
 ### Тесты
 
@@ -166,6 +184,9 @@ Supported input formats: WAV, FLAC, AIFF, OGG. Export format: WAV. No DAW requir
 ### Download
 
 Prebuilt binaries are available on the [project website](https://denispopkov.github.io/Deck/#download) and in [GitHub releases](https://github.com/DenisPopkov/Deck/releases/latest).
+The latest Windows nightly build is also available:
+- as a GitHub Actions artifact from the **Windows build** workflow;
+- as a stable direct download URL on GitHub Pages: [denispopkov.github.io/Deck/downloads/Deck-Windows-latest.zip](https://denispopkov.github.io/Deck/downloads/Deck-Windows-latest.zip).
 
 On first launch on MacOS, the system may block an unsigned app: right-click **Deck.app** -> **Open**.
 
@@ -216,6 +237,8 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
 ```
 
+CI and local automation use **MSVC** (Visual Studio toolchain), because JUCE 8 does not officially support MinGW.
+
 Or use the helper script:
 
 ```powershell
@@ -224,7 +247,20 @@ Or use the helper script:
 
 Executable path: `build\Deck_artefacts\Release\`.
 
-Prebuilt Windows and MacOS archives are also published in GitHub Actions (**Release builds** workflow).
+Prebuilt Windows and MacOS archives are also published in GitHub Actions (`Release builds` workflow on tags).
+On every push/pull request to `main`/`master`, the Windows archive is uploaded as an artifact in the `Windows build` workflow.
+On pushes to `main`/`master`, the same up-to-date Windows archive is also published to GitHub Pages at:
+`https://denispopkov.github.io/Deck/downloads/Deck-Windows-latest.zip`.
+
+#### Reproduce Windows CI build locally
+
+```powershell
+git clone https://github.com/DenisPopkov/Deck.git
+cd Deck
+.\scripts\build_windows_msvc.ps1
+```
+
+Verification: the archive should be created at `dist\Deck-0.2.0-Windows.zip`.
 
 ### Tests
 
