@@ -6,42 +6,77 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+
 jobs:
   macos:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
+
       - name: Configure and build
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Release -DCASSETTE_BUILD_TESTS=ON
           cmake --build build --config Release -j3
           ctest --test-dir build --output-on-failure
+
       - name: Package zip
         run: |
           APP="build/Deck_artefacts/Release/Deck.app"
           ditto -c -k --sequesterRsrc --keepParent "$APP" Deck-macOS.zip
+
       - uses: actions/upload-artifact@v4
         with:
           name: Deck-macOS
           path: Deck-macOS.zip
+          retention-days: 14
 
   windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Configure and build (MSVC)
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Release -DCASSETTE_BUILD_TESTS=OFF
           cmake --build build --config Release -j 3
+
       - name: Package zip
         shell: pwsh
         run: |
           $dir = "build/Deck_artefacts/Release"
           $exe = Get-ChildItem -Path $dir -Filter "*.exe" -Recurse | Select-Object -First 1
+          if (-not $exe) { throw "Deck executable not found under $dir" }
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           Copy-Item $exe.FullName dist/
-          Compress-Archive -Path dist/* -DestinationPath Deck-Windows.zip
+          Compress-Archive -Path dist/* -DestinationPath Deck-Windows.zip -Force
+
       - uses: actions/upload-artifact@v4
         with:
           name: Deck-Windows
           path: Deck-Windows.zip
+          retention-days: 14
+
+  release:
+    needs: [macos, windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect release assets
+        run: |
+          find artifacts -name '*.zip' -exec cp {} . \;
+          ls -la *.zip
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            Deck-macOS.zip
+            Deck-Windows.zip

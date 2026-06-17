@@ -1,16 +1,33 @@
 # Deck
 
-macOS desktop app (C++ / JUCE) for preparing digital audio before cassette recording.
+**Deck** — настольное приложение (C++ / JUCE) для подготовки цифрового аудио перед записью на кассету: микстейпы, адаптивный мастеринг под тип ленты и экспорт WAV, готового к записи.
 
-## Requirements
+**Сайт проекта:** [denispopkov.github.io/Deck](https://denispopkov.github.io/Deck/) — описание, скриншоты, FAQ и ссылки на скачивание для macOS и Windows.
+
+## Возможности
+
+- **Импорт и подготовка** — перетащите файл или папку, нажмите **Prepare**: адаптивный мастеринг и предпросмотр «до / после».
+- **Настройка ленты** — Type I, II или IV; C60, C90, C120 или произвольная длина.
+- **Сборка микстейпа** — распределение треков по сторонам A и B, порядок, проверка, что всё помещается на ленту.
+- **Экспорт** — true-peak лимитирование, EQ с учётом кассеты, опциональные тестовые тоны; на выходе WAV для записи на деку.
+
+Поддерживаемые форматы импорта: WAV, FLAC, AIFF, OGG. Экспорт — WAV. DAW не нужен.
+
+## Скачать
+
+Готовые сборки — на [сайте проекта](https://denispopkov.github.io/Deck/#download) или в [релизах GitHub](https://github.com/DenisPopkov/Deck/releases/latest).
+
+При первом запуске на macOS система может заблокировать неподписанное приложение: щёлкните правой кнопкой по **Deck.app** → **Открыть**.
+
+## Требования для сборки
 
 - **macOS:** Xcode Command Line Tools, CMake 3.22+
-- **Windows:** Visual Studio 2022 with the “Desktop development with C++” workload (JUCE 8 does not support MinGW)
-- **Optional:** Homebrew packages for extra features (see below)
+- **Windows:** Visual Studio 2022 с рабочей нагрузкой «Разработка классических приложений на C++» (JUCE 8 не поддерживает MinGW)
+- **Опционально:** пакеты Homebrew для дополнительных возможностей (см. ниже)
 
-JUCE 8 is fetched automatically via CMake FetchContent.
+JUCE 8 подтягивается автоматически через CMake FetchContent.
 
-## Build (macOS)
+## Сборка (macOS)
 
 ```bash
 git clone https://github.com/DenisPopkov/Deck.git
@@ -20,50 +37,48 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target Deck
 ```
 
-The app bundle is created at:
+Собранное приложение:
 
 ```text
 build/Deck_artefacts/Release/Deck.app
 ```
 
-Open it:
+Запуск:
 
 ```bash
 open build/Deck_artefacts/Release/Deck.app
 ```
 
-On first launch, macOS may block an unsigned app: right-click the app → **Open**.
-
-### Release package (macOS)
+### Релизный пакет (macOS)
 
 ```bash
 ./scripts/package_release.sh
 ```
 
-Output: `dist/macOS/Deck.app` and `dist/Deck-0.2.0-macOS.zip`.
+Результат: `dist/macOS/Deck.app` и `dist/Deck-0.2.0-macOS.zip`.
 
-## Build (Windows)
+## Сборка (Windows)
 
-From a Windows machine with Visual Studio 2022:
+На машине с Visual Studio 2022:
 
 ```powershell
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
 ```
 
-Or use the helper script:
+Или вспомогательный скрипт:
 
 ```powershell
 .\scripts\build_windows_msvc.ps1
 ```
 
-The executable is under `build\Deck_artefacts\Release\`.
+Исполняемый файл: `build\Deck_artefacts\Release\`.
 
-Pre-built Windows/macOS zips can also be downloaded from GitHub Actions (**Release builds** workflow).
+Готовые архивы для Windows и macOS также публикуются в GitHub Actions (workflow **Release builds**).
 
-## Tests
+## Тесты
 
-Tests are enabled by default (`CASSETTE_BUILD_TESTS=ON`):
+Тесты включены по умолчанию (`CASSETTE_BUILD_TESTS=ON`):
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
@@ -71,25 +86,25 @@ cmake --build build --target DeckTests
 ctest --test-dir build --output-on-failure
 ```
 
-Or run directly:
+Или напрямую:
 
 ```bash
 ./build/DeckTests
 ```
 
-## CMake options
+## Опции CMake
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `CASSETTE_BUILD_TESTS` | ON | Mastering adequacy test suite |
-| `CASSETTE_BUILD_GSTPEAQ` | ON | Runtime PEAQ/ODG via GStreamer (needs `gstreamer` at runtime) |
-| `CASSETTE_BUILD_ONNX` | OFF | ONNX Runtime STN saturation model |
-| `CASSETTE_BUILD_ESSENTIA` | OFF | Essentia for offline analysis |
-| `CASSETTE_BUILD_RUBBERBAND` | OFF | Rubber Band wow/flutter |
-| `CASSETTE_BUILD_PLUGIN` | OFF | VST3/AU plugin target |
-| `CASSETTE_BUILD_BURNER` | OFF | CassetteBurner timeline app |
+| Опция | По умолчанию | Описание |
+|--------|--------------|----------|
+| `CASSETTE_BUILD_TESTS` | ON | Набор тестов адекватности мастеринга |
+| `CASSETTE_BUILD_GSTPEAQ` | ON | PEAQ/ODG через GStreamer в рантайме (нужен `gstreamer`) |
+| `CASSETTE_BUILD_ONNX` | OFF | ONNX Runtime — модель STN-насыщения |
+| `CASSETTE_BUILD_ESSENTIA` | OFF | Essentia для офлайн-анализа |
+| `CASSETTE_BUILD_RUBBERBAND` | OFF | Rubber Band — wow/flutter |
+| `CASSETTE_BUILD_PLUGIN` | OFF | Цель VST3/AU |
+| `CASSETTE_BUILD_BURNER` | OFF | Приложение CassetteBurner (таймлайн) |
 
-Example with optional dependencies (Homebrew on Apple Silicon):
+Пример с опциональными зависимостями (Homebrew на Apple Silicon):
 
 ```bash
 brew install onnxruntime
@@ -98,28 +113,29 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release \
 cmake --build build
 ```
 
-### ONNX model (optional)
+### Модель ONNX (опционально)
 
-If you enable `CASSETTE_BUILD_ONNX`, place a model at `models/tape_stn.onnx` or export one:
+При включении `CASSETTE_BUILD_ONNX` положите модель в `models/tape_stn.onnx` или экспортируйте:
 
 ```bash
 pip install torch onnx onnxscript onnxruntime
 python scripts/export_stn_onnx.py
 ```
 
-The build copies the model into the app bundle when present (`scripts/copy_stn_onnx_if_present.sh`).
+При наличии модели сборка копирует её в бандл приложения (`scripts/copy_stn_onnx_if_present.sh`).
 
-## Project layout
+## Структура проекта
 
 ```text
-Source/          Application and DSP code
-cmake/           Core library CMake helpers
-Tests/           Offline mastering tests
-Tools/           CLI utilities (AnalyzeExport, RenderCompare)
-scripts/         Build and packaging helpers
-Assets/          App icon
+Source/          Код приложения и DSP
+cmake/           CMake-хелперы ядра
+Tests/           Офлайн-тесты мастеринга
+Tools/           CLI-утилиты (AnalyzeExport, RenderCompare)
+scripts/         Сборка и упаковка
+docs/            Сайт на GitHub Pages
+Assets/          Иконка приложения
 ```
 
-## License
+## Лицензия
 
-Engineering prototype. Third-party dependencies (JUCE, optional libraries) are subject to their own licenses.
+Инженерный прототип. Сторонние зависимости (JUCE и опциональные библиотеки) распространяются на своих условиях.
