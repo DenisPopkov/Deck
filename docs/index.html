@@ -41,7 +41,7 @@
         <div class="hero-cta">
           <a class="btn btn-primary" href="#download" data-i18n="btn.downloadDeck">Download Deck</a>
         </div>
-        <p class="hero-meta" data-i18n="hero.meta">MacOS &amp; Windows · No DAW required</p>
+        <p class="hero-meta" data-i18n="hero.meta">MacOS, Windows &amp; Linux · No DAW required</p>
         <figure class="hero-shot">
           <img src="assets/mock-2.png" alt="Deck on MacBook — mixtape editor with Side A and Side B track lists" width="11889" height="7317" loading="eager">
         </figure>
@@ -108,7 +108,9 @@
           <div class="download-buttons">
             <a class="btn btn-primary" href="assets/Deck-macOS.zip" download data-i18n="download.macos">MacOS</a>
             <a class="btn btn-secondary" href="downloads/Deck-Windows-latest.zip" download data-i18n="download.windows">Windows</a>
+            <a class="btn btn-secondary" href="https://github.com/DenisPopkov/Deck/blob/master/scripts/BUILD-LINUX.md" data-i18n="download.linux">Linux</a>
           </div>
+          <p class="download-note" data-i18n="download.linuxNote">Linux — experimental build from source (<code>make</code> in the repo). See <a href="https://github.com/DenisPopkov/Deck/blob/master/scripts/BUILD-LINUX.md">BUILD-LINUX.md</a>.</p>
         </div>
       </div>
     </section>
@@ -154,6 +156,13 @@
             </div>
           </details>
 
+          <details class="faq-item">
+            <summary data-i18n="faq.q6">Is there a Linux version?</summary>
+            <div class="faq-answer">
+              <p data-i18n="faq.a6">There is no prebuilt Linux installer yet. You can build Deck from source on Ubuntu/Fedora with CMake and the root <code>Makefile</code> — see <a href="https://github.com/DenisPopkov/Deck/blob/master/scripts/BUILD-LINUX.md">BUILD-LINUX.md</a>.</p>
+            </div>
+          </details>
+
         </div>
       </div>
     </section>
@@ -176,7 +185,7 @@
           "btn.downloadDeck": "Download Deck",
           "hero.tagline": "Prepare digital audio for cassette recording",
           "hero.lead": "Adaptive mastering tuned for Type I, II, and IV tape. Build mixtapes from folders, preview before and after, and export WAV files ready to hit record.",
-          "hero.meta": "MacOS & Windows · No DAW required",
+          "hero.meta": "MacOS, Windows & Linux · No DAW required",
           "about.label": "What is Deck",
           "about.title": "From digital files to cassette-ready WAV",
           "about.intro": "Deck is a desktop app built for people who still love the ritual of recording to tape. Pick your formulation and tape length, drop in a track or a whole folder, and let Deck handle loudness, EQ, and headroom so your music survives the transfer to analog.",
@@ -197,6 +206,8 @@
           "download.text": "Choose your platform and install the app.",
           "download.macos": "MacOS",
           "download.windows": "Windows",
+          "download.linux": "Linux",
+          "download.linuxNote": "Linux — experimental build from source (<code>make</code> in the repo). See <a href=\"https://github.com/DenisPopkov/Deck/blob/master/scripts/BUILD-LINUX.md\">BUILD-LINUX.md</a>.",
           "faq.title": "Common questions",
           "faq.q1": "Do I need a DAW or plugin host?",
           "faq.a1": "No. Deck is a standalone desktop application. Import audio, prepare it, and export WAV — all in one window.",
@@ -208,6 +219,8 @@
           "faq.a4": "Deck targets cassette transfer: tape formulation profiles, HF headroom, true-peak limiting, and optional tape-aware saturation — so your digital master survives recording to analog and playback on a deck or walkman.",
           "faq.q5": "Can I build a full mixtape from a folder?",
           "faq.a5": "Yes. Import a folder, arrange tracks in the editor, check whether everything fits your tape length, then prepare and export.",
+          "faq.q6": "Is there a Linux version?",
+          "faq.a6": "There is no prebuilt Linux installer yet. You can build Deck from source on Ubuntu/Fedora with CMake and the root <code>Makefile</code> — see <a href=\"https://github.com/DenisPopkov/Deck/blob/master/scripts/BUILD-LINUX.md\">BUILD-LINUX.md</a>.",
           "footer.text": "Deck — prepare audio for cassette recording"
         },
         ru: {
@@ -217,7 +230,7 @@
           "btn.downloadDeck": "Скачать Deck",
           "hero.tagline": "Подготовка цифрового аудио для записи на кассету",
           "hero.lead": "Адаптивный мастеринг под ленту Type I, II и IV. Собирайте микстейпы из папок, слушайте до и после обработки и экспортируйте WAV, готовый к записи.",
-          "hero.meta": "MacOS и Windows · Без DAW",
+          "hero.meta": "MacOS, Windows и Linux · Без DAW",
           "about.label": "Что такое Deck",
           "about.title": "От цифровых файлов к WAV для кассеты",
           "about.intro": "Deck — это десктопное приложение для тех, кто любит ритуал записи на кассету. Выберите тип ленты и длительность, добавьте трек или целую папку, а Deck настроит loudness, EQ и headroom, чтобы музыка корректно легла на аналог.",
@@ -238,6 +251,8 @@
           "download.text": "Выберите платформу и установите приложение.",
           "download.macos": "MacOS",
           "download.windows": "Windows",
+          "download.linux": "Linux",
+          "download.linuxNote": "Linux — экспериментальная сборка из исходников (<code>make</code> в репозитории). См. <a href=\"https://github.com/DenisPopkov/Deck/blob/master/scripts/BUILD-LINUX.md\">BUILD-LINUX.md</a>.",
           "faq.title": "Частые вопросы",
           "faq.q1": "Нужен ли DAW или плагин-хост?",
           "faq.a1": "Нет. Deck — это отдельное десктопное приложение. Импортируете аудио, подготавливаете и экспортируете WAV в одном окне.",
@@ -249,6 +264,8 @@
           "faq.a4": "Deck ориентирован на кассетный перенос: профили типа ленты, HF headroom, true-peak лимитирование и опциональная tape-aware сатурация — чтобы мастер корректно звучал после записи на аналог.",
           "faq.q5": "Можно собрать целый микстейп из папки?",
           "faq.a5": "Да. Импортируйте папку, разложите треки в редакторе, проверьте длину под кассету, затем подготовьте и экспортируйте.",
+          "faq.q6": "Есть ли версия для Linux?",
+          "faq.a6": "Готового установщика для Linux пока нет. Можно собрать Deck из исходников на Ubuntu/Fedora через CMake и корневой <code>Makefile</code> — см. <a href=\"https://github.com/DenisPopkov/Deck/blob/master/scripts/BUILD-LINUX.md\">BUILD-LINUX.md</a>.",
           "footer.text": "Deck — подготовка аудио для записи на кассету"
         }
       };

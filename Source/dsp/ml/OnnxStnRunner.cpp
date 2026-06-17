@@ -60,6 +60,7 @@ juce::File OnnxStnRunner::resolveModelPath() const
     const auto app = juce::File::getSpecialLocation(juce::File::currentApplicationFile);
 
     candidates.add(app.getChildFile("Contents/Resources/models/tape_stn.onnx"));
+    candidates.add(app.getParentDirectory().getChildFile("models/tape_stn.onnx"));
     candidates.add(juce::File(juce::File::getCurrentWorkingDirectory()).getChildFile("models/tape_stn.onnx"));
 
     if (const char* envPath = std::getenv("CASSETTE_STN_MODEL"))

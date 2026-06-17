@@ -32,6 +32,7 @@
 
 - **MacOS:** Xcode Command Line Tools, CMake 3.22+
 - **Windows:** Visual Studio 2022 с рабочей нагрузкой "Разработка классических приложений на C++" (JUCE 8 не поддерживает MinGW)
+- **Linux (экспериментально):** GCC/Clang, CMake 3.22+, Ninja, dev-пакеты X11/ALSA/OpenGL (см. `make deps-help`)
 - **Опционально:** пакеты Homebrew для дополнительных возможностей (см. ниже)
 
 JUCE 8 подтягивается автоматически через CMake FetchContent.
@@ -96,6 +97,24 @@ cd Deck
 
 Проверка: архив должен появиться в `dist\Deck-0.2.0-Windows.zip`.
 
+### Сборка (Linux)
+
+Экспериментальная сборка из исходников (готового инсталлятора пока нет):
+
+```bash
+make deps-help   # список пакетов для Debian/Fedora
+make
+make run
+```
+
+Архив для распространения:
+
+```bash
+make package
+```
+
+Подробная инструкция: [`scripts/BUILD-LINUX.md`](scripts/BUILD-LINUX.md).
+
 ### Тесты
 
 Тесты включены по умолчанию (`CASSETTE_BUILD_TESTS=ON`):
@@ -151,7 +170,7 @@ Source/          Код приложения и DSP
 cmake/           CMake-хелперы ядра
 Tests/           Офлайн-тесты мастеринга
 Tools/           CLI-утилиты (AnalyzeExport, RenderCompare)
-scripts/         Сборка и упаковка
+scripts/         Сборка и упаковка (Makefile, BUILD-LINUX.md, BUILD-WINDOWS.md)
 docs/            Сайт на GitHub Pages
 Assets/          Иконка приложения
 ```
@@ -166,7 +185,7 @@ Assets/          Иконка приложения
 
 **Deck** is a desktop app (C++ / JUCE) for preparing digital audio before recording to cassette: mixtape workflow, tape-aware adaptive mastering, and WAV export ready for recording.
 
-**Project website:** [denispopkov.github.io/Deck](https://denispopkov.github.io/Deck/) — overview, screenshots, FAQ, and download links for MacOS and Windows.
+**Project website:** [denispopkov.github.io/Deck](https://denispopkov.github.io/Deck/) — overview, screenshots, FAQ, and download links for MacOS, Windows, and Linux (build from source).
 
 ### Features
 
@@ -190,6 +209,7 @@ On first launch on MacOS, the system may block an unsigned app: right-click **De
 
 - **MacOS:** Xcode Command Line Tools, CMake 3.22+
 - **Windows:** Visual Studio 2022 with the "Desktop development with C++" workload (JUCE 8 does not support MinGW)
+- **Linux (experimental):** GCC/Clang, CMake 3.22+, Ninja, X11/ALSA/OpenGL dev packages (see `make deps-help`)
 - **Optional:** Homebrew packages for extra features (see below)
 
 JUCE 8 is fetched automatically via CMake FetchContent.
@@ -254,6 +274,24 @@ cd Deck
 
 Verification: the archive should be created at `dist\Deck-0.2.0-Windows.zip`.
 
+### Build (Linux)
+
+Experimental source build (no prebuilt installer yet):
+
+```bash
+make deps-help
+make
+make run
+```
+
+Release tarball:
+
+```bash
+make package
+```
+
+Full guide: [`scripts/BUILD-LINUX.md`](scripts/BUILD-LINUX.md).
+
 ### Tests
 
 Tests are enabled by default (`CASSETTE_BUILD_TESTS=ON`):
@@ -309,7 +347,7 @@ Source/          Application and DSP code
 cmake/           Core CMake helpers
 Tests/           Offline mastering tests
 Tools/           CLI utilities (AnalyzeExport, RenderCompare)
-scripts/         Build and packaging scripts
+scripts/         Build and packaging (Makefile, BUILD-LINUX.md, BUILD-WINDOWS.md)
 docs/            GitHub Pages site
 Assets/          App icon
 ```

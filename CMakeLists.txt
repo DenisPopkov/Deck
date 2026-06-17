@@ -148,6 +148,25 @@ if(APPLE)
     )
 endif()
 
+if(UNIX AND NOT APPLE)
+    add_custom_command(
+        TARGET Deck
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_FILE_DIR:Deck>/scripts"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_SOURCE_DIR}/scripts/run_peaq.sh"
+                "$<TARGET_FILE_DIR:Deck>/scripts/run_peaq.sh"
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+                "$<TARGET_FILE_DIR:Deck>/models"
+        COMMAND /bin/bash "${CMAKE_SOURCE_DIR}/scripts/copy_stn_onnx_if_present.sh"
+                "${CMAKE_SOURCE_DIR}/models/tape_stn.onnx"
+                "$<TARGET_FILE_DIR:Deck>/models/tape_stn.onnx"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        COMMENT "Bundling GstPEAQ script and optional STN model (Linux)"
+    )
+endif()
+
 if(CASSETTE_BUILD_TESTS)
     enable_testing()
 

@@ -69,6 +69,7 @@ bool runGstPeaq(const juce::File& refWav, const juce::File& testWav, float& odgO
     const auto appFile = juce::File::getSpecialLocation(juce::File::currentApplicationFile);
     candidates.add(appFile.getChildFile("Contents/Resources/scripts/run_peaq.sh"));
     candidates.add(appFile.getParentDirectory().getParentDirectory().getChildFile("Resources/scripts/run_peaq.sh"));
+    candidates.add(appFile.getParentDirectory().getChildFile("scripts/run_peaq.sh"));
     candidates.add(juce::File(juce::File::getCurrentWorkingDirectory()).getChildFile("scripts/run_peaq.sh"));
 
     if (const char* envScript = std::getenv("CASSETTE_PEAQ_SCRIPT"))
