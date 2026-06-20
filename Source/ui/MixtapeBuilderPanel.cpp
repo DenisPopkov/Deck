@@ -103,8 +103,7 @@ void MixtapeBuilderPanel::buttonClicked(juce::Button* b)
                                     : juce::File::getSpecialLocation(juce::File::userMusicDirectory),
             AudioFileLoader::importFileWildcard());
 
-        chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles
-                                 | juce::FileBrowserComponent::canSelectDirectories,
+        chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
                              [this, chooser](const juce::FileChooser& fc) {
                                  const auto picked = fc.getResult();
                                  if (picked.isDirectory() && onFolderSelected)

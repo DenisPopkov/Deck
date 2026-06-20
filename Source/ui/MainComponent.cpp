@@ -71,7 +71,7 @@ MainComponent::MainComponent()
 
     Theme::applyLabel(status, Theme::bodyFont(), Theme::textSecondary());
 
-    dropHero.onChooseFolder = [this] { pickFolder(); };
+    dropHero.onChooseFolder = [this] { pickImportFolder(); };
     compareWaveform.setShowEmptyDropZone(false);
 
     mixtapePanel.onFolderSelected = [this](const juce::File& folder) { scanMixFolder(folder); };
@@ -342,7 +342,7 @@ bool MainComponent::keyPressed(const juce::KeyPress& key)
     }
     if (mods.isCommandDown() && key.getKeyCode() == 'O')
     {
-        pickFolder();
+        pickImportAudio();
         return true;
     }
     if (mods.isCommandDown() && key.getKeyCode() == juce::KeyPress::returnKey)
@@ -486,27 +486,38 @@ void MainComponent::promptChangeTapeType()
     });
 }
 
-void MainComponent::pickFolder()
+void MainComponent::pickImportAudio()
 {
     auto chooser = std::make_shared<juce::FileChooser>(
         "Import audio",
         juce::File::getSpecialLocation(juce::File::userMusicDirectory),
         AudioFileLoader::importFileWildcard());
 
-    chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles
-                             | juce::FileBrowserComponent::canSelectDirectories,
+    chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
                          [this, chooser](const juce::FileChooser& fc) {
                              const auto picked = fc.getResult();
                              if (picked == juce::File())
                                  return;
 
-                             if (picked.isDirectory())
-                                 scanMixFolder(picked);
-                             else if (AudioFileLoader::isSupportedAudioFile(picked))
+                             if (AudioFileLoader::isSupportedAudioFile(picked))
                                  loadAudioFile(picked);
                              else
                                  setStatus("Unsupported format (use " + AudioFileLoader::supportedFormatsLabel() + ")",
                                            ui::Theme::warnAmber());
+                         });
+}
+
+void MainComponent::pickImportFolder()
+{
+    auto chooser = std::make_shared<juce::FileChooser>(
+        "Import folder",
+        juce::File::getSpecialLocation(juce::File::userMusicDirectory));
+
+    chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
+                         [this, chooser](const juce::FileChooser& fc) {
+                             const auto picked = fc.getResult();
+                             if (picked.isDirectory())
+                                 scanMixFolder(picked);
                          });
 }
 
@@ -1125,7 +1136,7 @@ void MainComponent::buttonClicked(juce::Button* button)
     }
     if (button == &importButton)
     {
-        pickFolder();
+        pickImportAudio();
         return;
     }
     if (button == &startButton)

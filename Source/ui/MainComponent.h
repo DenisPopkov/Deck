@@ -56,7 +56,8 @@ private:
     void scanMixFolder(const juce::File& folder);
     void refreshFolderFitLabel();
     void exportWav();
-    void pickFolder();
+    void pickImportAudio();
+    void pickImportFolder();
     void resetSession();
     void invalidatePreparedOutput();
     void promptChangeTapeType();
