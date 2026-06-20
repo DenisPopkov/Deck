@@ -329,12 +329,34 @@ bool MixtapeEditController::moveRowDown(int sideIndex, int row)
 
 bool MixtapeEditController::deleteTrack(int sideIndex, int row)
 {
-    auto& tracks = sideIndex == 0 ? sideATracks : sideBTracks;
-    if (row < 0 || row >= static_cast<int>(tracks.size()))
+    return deleteTracks({ { sideIndex, row } });
+}
+
+bool MixtapeEditController::deleteTracks(const std::vector<std::pair<int, int>>& sideRows)
+{
+    if (sideRows.empty())
         return false;
 
+    auto sorted = sideRows;
+    std::sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) {
+        if (a.first != b.first)
+            return a.first < b.first;
+        return a.second > b.second;
+    });
+
+    for (const auto& [side, row] : sorted)
+    {
+        const auto& tracks = side == 0 ? sideATracks : sideBTracks;
+        if (row < 0 || row >= static_cast<int>(tracks.size()))
+            return false;
+    }
+
     pushUndoSnapshot();
-    tracks.erase(tracks.begin() + row);
+    for (const auto& [side, row] : sorted)
+    {
+        auto& tracks = side == 0 ? sideATracks : sideBTracks;
+        tracks.erase(tracks.begin() + static_cast<size_t>(row));
+    }
     saveActiveCassetteLayout();
     return true;
 }

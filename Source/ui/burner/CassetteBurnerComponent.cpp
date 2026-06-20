@@ -126,6 +126,7 @@ CassetteBurnerComponent::CassetteBurnerComponent()
     params.onExportMix = [this] { renderSide(false); };
 
     deviceManager.initialiseWithDefaultDevices(0, 2);
+    trackListEditor.attachToAudioDevice(deviceManager);
     audioPlayer.setSource(&preview);
     preview.setMonitoringEnabled(true);
     deviceManager.addAudioCallback(this);

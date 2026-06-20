@@ -5,6 +5,8 @@
 #include "MixtapeProject.h"
 #include "../dsp/CassetteProfile.h"
 #include "../dsp/MasteringOptions.h"
+#include <algorithm>
+#include <vector>
 
 namespace cassette
 {
@@ -52,6 +54,7 @@ public:
     bool moveRowUp(int sideIndex, int row);
     bool moveRowDown(int sideIndex, int row);
     bool deleteTrack(int sideIndex, int row);
+    bool deleteTracks(const std::vector<std::pair<int, int>>& sideRows);
     void rebalance(const TapeLengthSpec& tape);
     /** Recompute cassette count from the current track list (respects deletions). */
     void syncCassettePlan(const TapeLengthSpec& tape);

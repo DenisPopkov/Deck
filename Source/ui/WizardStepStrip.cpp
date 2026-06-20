@@ -51,7 +51,7 @@ void WizardStepStrip::paint(juce::Graphics& g)
         const int dotR = 11;
         juce::Rectangle<int> dot(cx - dotR, lineY - dotR, dotR * 2, dotR * 2);
 
-        g.setColour(isDone ? Theme::okGreen() : (isActive ? Theme::accent() : Theme::buttonDisabledFill()));
+        g.setColour(isDone || isActive ? Theme::accent() : Theme::buttonDisabledFill());
         g.fillEllipse(dot.toFloat());
         g.setColour(isActive || isDone ? Theme::border() : Theme::buttonDisabledBorder());
         g.drawEllipse(dot.toFloat(), 1.0f);
@@ -63,7 +63,7 @@ void WizardStepStrip::paint(juce::Graphics& g)
                                isDone || isActive ? juce::Colours::white : Theme::buttonDisabledText());
 
         juce::Rectangle<int> titleArea(area.getX() + i * cellW, lineY + dotR + 4, cellW, area.getBottom() - lineY - dotR - 4);
-        g.setColour(isDone ? Theme::okGreen() : (isActive ? Theme::textPrimary() : Theme::textMuted()));
+        g.setColour(isDone || isActive ? Theme::accent() : Theme::textMuted());
         g.setFont(Theme::captionFont());
         g.drawText(titles[i], titleArea, juce::Justification::centredTop);
     }

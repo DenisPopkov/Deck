@@ -39,6 +39,12 @@ struct CassetteProfile
     float saturationDrive = 1.0f;
     float biasReductionOnHf = 0.0f;
     float autoPrepRelief = 0.0f;
+    bool recordHfPreEmphasis = false;
+    float recordHfPreEmphasisDb = 0.0f;
+    float recordHfPreEmphasisHz = 5500.0f;
+    float recordHfPreEmphasisDb2 = 0.0f;
+    float recordHfPreEmphasisHz2 = 9000.0f;
+    bool softwareHxPro = false;
     bool emulateHxPro = false;
     bool applyTapeSaturation = false;
     bool gentleTransientShaping = false;

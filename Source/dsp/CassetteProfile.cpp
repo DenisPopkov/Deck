@@ -31,6 +31,9 @@ CassetteProfile CassetteProfile::fromFormulation(TapeFormulation f)
             p.hfTamerMaxRatio = 1.45f;
             p.saturationDrive = 0.92f;
             p.applyTapeSaturation = false;
+            p.recordHfPreEmphasis = true;
+            p.recordHfPreEmphasisHz = 6500.0f;
+            p.recordHfPreEmphasisDb = 2.6f;
             break;
         case TapeFormulation::TypeII:
             p.displayName = "Type II (Chrome)";
@@ -42,6 +45,9 @@ CassetteProfile CassetteProfile::fromFormulation(TapeFormulation f)
             p.biasReductionOnHf = 0.08f;
             p.hfTamerRatio = 1.15f;
             p.hfTamerMaxRatio = 2.0f;
+            p.recordHfPreEmphasis = true;
+            p.recordHfPreEmphasisHz = 5500.0f;
+            p.recordHfPreEmphasisDb = 5.6f;
             setSideHighCutFromHeadroom(p);
             break;
         case TapeFormulation::TypeIV:
@@ -55,6 +61,9 @@ CassetteProfile CassetteProfile::fromFormulation(TapeFormulation f)
             p.hfTamerRatio = 1.1f;
             p.hfTamerMaxRatio = 1.8f;
             p.saturationDrive = 1.0f;
+            p.recordHfPreEmphasis = true;
+            p.recordHfPreEmphasisHz = 5000.0f;
+            p.recordHfPreEmphasisDb = 6.4f;
             setSideHighCutFromHeadroom(p);
             break;
         case TapeFormulation::VintageWalkman:
@@ -82,6 +91,9 @@ CassetteProfile CassetteProfile::fromFormulation(TapeFormulation f)
             p.emulateHxPro = true;
             p.hfTamerRatio = 1.1f;
             p.hfTamerMaxRatio = 1.7f;
+            p.recordHfPreEmphasis = true;
+            p.recordHfPreEmphasisHz = 5500.0f;
+            p.recordHfPreEmphasisDb = 5.8f;
             setSideHighCutFromHeadroom(p);
             break;
         case TapeFormulation::CheapPortable:
@@ -122,6 +134,13 @@ void applyKenwoodKX1100GTuning(CassetteProfile& p)
             p.truePeakCeilingDbfs = -0.8f;
             p.hfTamerRatio = 1.06f;
             p.hfTamerMaxRatio = 1.38f;
+            // Empirical best on BTS Type I / KX-1100G: v2 (+2.8 dB) beats v3/v4.
+            p.recordHfPreEmphasis = true;
+            p.recordHfPreEmphasisHz = 6000.0f;
+            p.recordHfPreEmphasisDb = 2.8f;
+            p.recordHfPreEmphasisDb2 = 0.0f;
+            p.softwareHxPro = true;
+            p.biasReductionOnHf = 0.06f;
             break;
         case TapeFormulation::TypeII:
             p.displayName = "Type II - Kenwood KX-1100G";
@@ -132,6 +151,9 @@ void applyKenwoodKX1100GTuning(CassetteProfile& p)
             p.biasReductionOnHf = 0.10f;
             p.hfTamerRatio = 1.10f;
             p.hfTamerMaxRatio = 1.75f;
+            p.recordHfPreEmphasis = true;
+            p.recordHfPreEmphasisHz = 5500.0f;
+            p.recordHfPreEmphasisDb = 5.8f;
             break;
         case TapeFormulation::TypeIV:
             p.displayName = "Type IV - Kenwood KX-1100G";
@@ -142,6 +164,9 @@ void applyKenwoodKX1100GTuning(CassetteProfile& p)
             p.biasReductionOnHf = 0.06f;
             p.hfTamerRatio = 1.06f;
             p.hfTamerMaxRatio = 1.60f;
+            p.recordHfPreEmphasis = true;
+            p.recordHfPreEmphasisHz = 5200.0f;
+            p.recordHfPreEmphasisDb = 6.8f;
             break;
         default:
             p.displayName = p.displayName + " - Kenwood KX-1100G";

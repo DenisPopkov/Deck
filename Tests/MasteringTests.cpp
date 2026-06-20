@@ -351,7 +351,7 @@ static void testAnalyzeLayoutRespectsManualSplit(TestContext& ctx)
 
     const auto tape = tapeLengthSpecForPreset(TapeLengthPreset::C90, 45.0);
     const auto autoReport = FolderMixBuilder::analyzeFit(scan, tape);
-    const int manualSplit = 2;
+    const int manualSplit = autoReport.split.sideAEndIndex == 1 ? 2 : 1;
     const auto manualReport = FolderMixBuilder::analyzeLayout(scan, manualSplit, tape);
 
     ctx.expectTrue(manualReport.split.sideAEndIndex == manualSplit, "manual split index preserved");
@@ -574,7 +574,10 @@ static void testCharliFixtureKenwoodMasteringRegression(TestContext& ctx)
                    "Charli fixture should use hot/clean level-only path");
     ctx.expectTrue(result.optionsUsed.hfTamerIntensity < 0.05f,
                    "Charli fixture should not engage HF tamer");
-    ctx.expectTrue(after.integratedLUFS >= profile.maxIntegratedLUFS - 0.5f,
+    // Record-side HF pre-emphasis lifts the treble before the deck; under a fixed
+    // true-peak ceiling that trades a little integrated loudness (~1 LU here) for
+    // HF fidelity, so the lower bound is wider than the legacy level-only contract.
+    ctx.expectTrue(after.integratedLUFS >= profile.maxIntegratedLUFS - 1.3f,
                    "Charli mastered LUFS should not sit far below Kenwood cap");
     ctx.expectTrue(after.integratedLUFS <= profile.maxIntegratedLUFS + 0.35f,
                    "Charli mastered LUFS should land near Kenwood cap");
@@ -598,6 +601,21 @@ static void testKenwoodKX1100ProfileExtendsHfHeadroom(TestContext& ctx)
     ctx.expectTrue(!kenwood.emulateHxPro, "KX-1100G has no Dolby HX-Pro");
     ctx.expectTrue(kenwood.biasReductionOnHf > generic.biasReductionOnHf,
                    "KX-1100G prep should compensate missing HX-Pro in software");
+}
+
+static void testKenwoodTypeICalibratedTransferProfile(TestContext& ctx)
+{
+    const auto kenwoodTypeI = CassetteProfile::forRecording(RecordingDeck::KenwoodKX1100G,
+                                                            TapeFormulation::TypeI);
+
+    ctx.expectTrue(kenwoodTypeI.recordHfPreEmphasis, "Kenwood Type I should enable record HF pre-emphasis");
+    ctx.expectTrue(kenwoodTypeI.softwareHxPro, "Kenwood Type I should use software HX-Pro headroom");
+    ctx.expectTrue(kenwoodTypeI.recordHfPreEmphasisDb >= 2.5f,
+                   "Kenwood Type I shelf should match empirically tuned v2 level");
+    ctx.expectTrue(kenwoodTypeI.recordHfPreEmphasisDb2 < 0.05f,
+                   "Kenwood Type I should use single shelf (dual shelf saturates ferric tape)");
+    ctx.expectTrue(kenwoodTypeI.biasReductionOnHf > 0.0f,
+                   "Kenwood Type I should bias HF saturation model toward tape headroom");
 }
 
 static void testKenwoodPlannerIsLessAggressiveOnBorderlineSource(TestContext& ctx)
@@ -893,6 +911,7 @@ int main()
     testCharliFixtureKenwoodMasteringRegression(ctx);
 #endif
     testKenwoodKX1100ProfileExtendsHfHeadroom(ctx);
+    testKenwoodTypeICalibratedTransferProfile(ctx);
     testKenwoodPlannerIsLessAggressiveOnBorderlineSource(ctx);
     testPreflightAddsCalibrationBlock(ctx);
     testTruePeakDetectsInterSamplePeaks(ctx);

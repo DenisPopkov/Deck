@@ -12,6 +12,8 @@ CassetteLook::CassetteLook() : juce::LookAndFeel_V4(getLightColourScheme())
     setColour(juce::ComboBox::backgroundColourId, ui::Theme::card());
     setColour(juce::ComboBox::outlineColourId, ui::Theme::border());
     setColour(juce::PopupMenu::backgroundColourId, ui::Theme::card());
+    setColour(juce::PopupMenu::highlightedBackgroundColourId, ui::Theme::accent().withAlpha(0.14f));
+    setColour(juce::PopupMenu::highlightedTextColourId, ui::Theme::accent());
     setColour(juce::Label::textColourId, ui::Theme::textPrimary());
 }
 

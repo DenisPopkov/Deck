@@ -78,8 +78,6 @@ private:
     void updateDropHighlight(const juce::StringArray& files, bool active);
     DropPayloadKind dropPayloadKind(const juce::StringArray& files) const;
 
-    juce::Label sessionLabel;
-
     TapeSetupPanel tapeSetupPanel;
     DropHeroPanel dropHero;
     WizardStepStrip wizardSteps;
@@ -91,6 +89,7 @@ private:
     juce::TextButton exportButton { "Export WAV" };
 
     CompareWaveformDisplay compareWaveform;
+    juce::AudioDeviceManager previewDeviceManager;
     TrackListEditor trackListEditor;
     MixtapeBuilderPanel mixtapePanel;
 

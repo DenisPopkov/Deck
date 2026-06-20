@@ -206,7 +206,7 @@ void TapeSetupPanel::setMixtapeMode(bool mixtape)
     lengthBtnC120.setVisible(mainScreenMode && mixtape);
     tapeLengthBox.setVisible(!mainScreenMode && showLengthControls);
     tapeLengthLabel.setVisible(!mainScreenMode && mixtape);
-    tapeFitLabel.setVisible(mainScreenMode && mixtape);
+    tapeFitLabel.setVisible(false);
     updateLengthControlPresentation();
     if (!mainScreenMode)
         prepareButton.setButtonText(mixtape ? "Build Side A/B WAV" : "Prepare for Tape");
@@ -218,8 +218,16 @@ void TapeSetupPanel::setMixtapeMode(bool mixtape)
 
 void TapeSetupPanel::setTapeFitSummary(const juce::String& text, bool ok)
 {
+    if (mainScreenMode)
+    {
+        tapeFitLabel.setText({}, juce::dontSendNotification);
+        tapeFitLabel.setVisible(false);
+        return;
+    }
+
     tapeFitLabel.setText(text, juce::dontSendNotification);
-    tapeFitLabel.setColour(juce::Label::textColourId, ok ? ui::Theme::okGreen() : ui::Theme::warnAmber());
+    tapeFitLabel.setColour(juce::Label::textColourId,
+                           ok ? ui::Theme::textPrimary() : ui::Theme::warnAmber());
     resized();
     repaint();
 }
@@ -473,12 +481,6 @@ void TapeSetupPanel::resized()
             {
                 r.removeFromTop(6);
                 customMinutesSlider.setBounds(r.removeFromTop(28));
-            }
-
-            if (tapeFitLabel.getText().isNotEmpty())
-            {
-                r.removeFromTop(8);
-                tapeFitLabel.setBounds(r.removeFromTop(juce::jmin(36, r.getHeight())));
             }
         }
         return;

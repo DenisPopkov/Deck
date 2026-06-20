@@ -18,8 +18,7 @@ MainComponent::MainComponent()
 {
     using namespace ui;
 
-    for (auto* c : { static_cast<juce::Component*>(&sessionLabel),
-                     static_cast<juce::Component*>(&importButton),
+    for (auto* c : { static_cast<juce::Component*>(&importButton),
                      static_cast<juce::Component*>(&tapeSetupPanel),
                      static_cast<juce::Component*>(&dropHero),
                      static_cast<juce::Component*>(&wizardSteps),
@@ -45,8 +44,6 @@ MainComponent::MainComponent()
     };
     tapeSetupPanel.onChangeTapeTypeRequested = [this] { promptChangeTapeType(); };
 
-    Theme::applyLabel(sessionLabel, Theme::captionFont(), Theme::textMuted());
-    sessionLabel.setJustificationType(juce::Justification::topLeft);
     Theme::applyLabel(readySummary, Theme::metricFont(), Theme::okGreen());
     readySummary.setVisible(false);
 
@@ -71,34 +68,13 @@ MainComponent::MainComponent()
     mixtapePanel.onFolderSelected = [this](const juce::File& folder) { scanMixFolder(folder); };
 
     trackListEditor.setVisible(false);
+    previewDeviceManager.initialiseWithDefaultDevices(0, 2);
+    trackListEditor.attachToAudioDevice(previewDeviceManager);
     trackListEditor.onLayoutChanged = [this] {
         if (mixtapeModeActive && hasProcessed)
             invalidatePreparedOutput();
         if (folderScan.has_value() && folderScan->success)
             mixtapeEditor.syncCassettePlan(tapeSetup().getTapeLengthSpec());
-        refreshFolderFitLabel();
-        syncLayout();
-    };
-    trackListEditor.onRebalanceRequested = [this] {
-        if (mixtapeEditor.hasManualEdits())
-        {
-            ui::ConfirmDialogOptions options;
-            options.title = "Rebalance sides";
-            options.message = "Replace your track layout with the automatic split?";
-            options.confirmLabel = "Rebalance";
-            options.cancelLabel = "Cancel";
-            ui::showConfirmDialog(this, options, [this](bool confirmed) {
-                if (!confirmed)
-                    return;
-                mixtapeEditor.rebalance(tapeSetup().getTapeLengthSpec());
-                trackListEditor.refresh();
-                refreshFolderFitLabel();
-                syncLayout();
-            });
-            return;
-        }
-        mixtapeEditor.rebalance(tapeSetup().getTapeLengthSpec());
-        trackListEditor.refresh();
         refreshFolderFitLabel();
         syncLayout();
     };
@@ -113,6 +89,7 @@ MainComponent::MainComponent()
 MainComponent::~MainComponent()
 {
     stopTimer();
+    previewDeviceManager.closeAudioDevice();
 }
 
 TapeSetupPanel& MainComponent::tapeSetup() { return tapeSetupPanel; }
@@ -281,8 +258,6 @@ void MainComponent::resized()
     newButton.setBounds(left.removeFromTop(36));
     left.removeFromTop(10);
     importButton.setBounds(left.removeFromTop(36));
-    left.removeFromTop(18);
-    sessionLabel.setBounds(left.removeFromTop(72));
 
     auto topBar = centre.removeFromTop(56).reduced(14, 12);
 
@@ -310,7 +285,7 @@ void MainComponent::resized()
     if (mixtapeModeActive)
     {
         tapeSetupPanel.setCompactToolbarMode(false);
-        const int tapePanelH = tapeSetupPanel.isCustomTapeLengthSelected() ? 204 : 172;
+        const int tapePanelH = tapeSetupPanel.isCustomTapeLengthSelected() ? 168 : 136;
         tapeSetupPanel.setBounds(centre.removeFromTop(tapePanelH).reduced(12, 0));
         centre.removeFromTop(4);
     }
@@ -451,7 +426,6 @@ void MainComponent::resetSession()
     preparedTapeLabel = {};
     compareWaveform.clearAll();
     readySummary.setVisible(false);
-    sessionLabel.setText("No project loaded", juce::dontSendNotification);
     exportButton.setEnabled(false);
 
     tapeSetupPanel.setMixtapeMode(false);
@@ -544,11 +518,7 @@ void MainComponent::refreshFolderFitLabel()
     folderFitOk = editorActive ? mixtapeEditor.canPrepare(tape) : report.fits;
     mixtapePanel.setFitReport(report.summary(), folderFitOk);
     mixtapePanel.setBuildEnabled(folderFitOk && !isProcessing.load());
-    tapeSetupPanel.setTapeFitSummary(report.summary(), folderFitOk);
     trackListEditor.setTapeSpec(tape);
-
-    if (mixtapeModeActive)
-        setStatus(report.summary(), folderFitOk ? ui::Theme::textPrimary() : ui::Theme::warnAmber());
 }
 
 void MainComponent::scanMixFolder(const juce::File& folder)
@@ -582,8 +552,6 @@ void MainComponent::scanMixFolder(const juce::File& folder)
             mixtapePanel.setFolderScan(scan, folder);
             hasSource = true;
             log("UI: folder scan OK - " + juce::String(scan.tracks.size()) + " tracks");
-            sessionLabel.setText(folder.getFileName() + "\n" + juce::String(scan.tracks.size()) + " tracks",
-                                 juce::dontSendNotification);
 
             const auto fitReport = FolderMixBuilder::analyzeFit(scan, tapeSetup().getTapeLengthSpec());
             mixtapeEditor.loadFromScan(scan, fitReport);
@@ -591,8 +559,7 @@ void MainComponent::scanMixFolder(const juce::File& folder)
             trackListEditor.setLoading(false);
             refreshFolderFitLabel();
             trackListEditor.refresh();
-            setStatus("Edit track order, then Prepare.",
-                      ui::Theme::textPrimary());
+            setStatus({}, ui::Theme::textSecondary());
             syncLayout();
         });
     });
@@ -628,7 +595,6 @@ void MainComponent::loadAudioFile(const juce::File& file)
             loadedAudio = *result.audio;
             sourceAudio = *result.audio;
             hasSource = true;
-            sessionLabel.setText(file.getFileName(), juce::dontSendNotification);
             compareWaveform.setBeforeBuffer(sourceAudio->buffer, sourceAudio->sampleRate);
             compareWaveform.clearAfter();
 

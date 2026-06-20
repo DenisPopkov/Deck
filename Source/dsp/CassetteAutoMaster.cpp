@@ -153,8 +153,11 @@ void applyTapePrintCompensation(juce::AudioBuffer<float>& buffer,
     {
         case TapeFormulation::TypeI:
         {
-            const float shelfDb = profile.recordingDeck == RecordingDeck::KenwoodKX1100G ? 1.5f : 2.0f;
-            applyShelfGain(buffer, sampleRate, true, 7500.0f, shelfDb, 0.65f);
+            if (!profile.recordHfPreEmphasis)
+            {
+                const float shelfDb = profile.recordingDeck == RecordingDeck::KenwoodKX1100G ? 1.5f : 2.0f;
+                applyShelfGain(buffer, sampleRate, true, 7500.0f, shelfDb, 0.65f);
+            }
             break;
         }
         case TapeFormulation::TypeII:
@@ -177,6 +180,119 @@ void applyTapePrintCompensation(juce::AudioBuffer<float>& buffer,
             break;
         default:
             break;
+    }
+}
+
+float computeSoftwareHxProScale(const juce::AudioBuffer<float>& buffer, double sampleRate)
+{
+    if (buffer.getNumSamples() == 0)
+        return 1.0f;
+
+    juce::AudioBuffer<float> mono(1, buffer.getNumSamples());
+    mono.clear();
+    const int nCh = buffer.getNumChannels();
+    for (int ch = 0; ch < nCh; ++ch)
+        mono.addFrom(0, 0, buffer, ch, 0, buffer.getNumSamples(), 1.0f / static_cast<float>(nCh));
+
+    BiquadFilter hp(5500.0f, 0.707f, FilterType::HighPass);
+    hp.prepare(sampleRate, buffer.getNumSamples(), 1);
+    hp.process(mono);
+
+    const auto* data = mono.getReadPointer(0);
+    double sumSq = 0.0;
+    float peak = 0.0f;
+    for (int i = 0; i < buffer.getNumSamples(); ++i)
+    {
+        const float a = std::abs(data[i]);
+        sumSq += static_cast<double>(a * a);
+        peak = juce::jmax(peak, a);
+    }
+
+    const float rms = static_cast<float>(std::sqrt(sumSq / buffer.getNumSamples()));
+    const float rmsDb = juce::Decibels::gainToDecibels(rms + 1.0e-9f, -100.0f);
+    const float peakDb = juce::Decibels::gainToDecibels(peak + 1.0e-9f, -100.0f);
+
+    // Back off on sustained hot HF (saturation risk); allow more on transient HF.
+    const float sustainedHot = juce::jlimit(0.0f, 1.0f, juce::jmap(rmsDb, -28.0f, -16.0f, 0.0f, 1.0f));
+    const float transientRelief = juce::jlimit(0.0f, 0.30f, juce::jmap(peakDb - rmsDb, 6.0f, 14.0f, 0.0f, 0.30f));
+
+    return juce::jlimit(0.38f, 1.0f, 1.0f - 0.58f * sustainedHot + transientRelief);
+}
+
+void applyRecordHfPreEmphasis(juce::AudioBuffer<float>& buffer,
+                              const CassetteProfile& profile,
+                              const AudioFeatures& features,
+                              double sampleRate)
+{
+    if (!profile.recordHfPreEmphasis
+        || profile.recordHfPreEmphasisDb < 0.05f
+        || buffer.getNumSamples() == 0)
+        return;
+
+    // Record-side treble lift that is the inverse of the deck/tape playback
+    // HF rolloff, so that after the tape loses ~3-5 dB of top end the playback
+    // comes back flat (closer to the digital source).
+    //
+    // HX-Pro-inspired headroom gating. On already-bright/harsh material we must
+    // NOT add more treble: it would not sound more "digital" (the source was not
+    // that bright) and it would saturate the tape. "How HF-hot is the program"
+    // is keyed off the >4 kHz energy share, perceived sharpness, and the tamer's
+    // own strength (each mapped to 0..1).
+    const float hfHot = juce::jlimit(0.0f, 1.0f,
+        juce::jmax(features.psycho.hfTamerStrength,
+                   juce::jmax(juce::jmap(features.hfEnergyRatio, 0.20f, 0.55f, 0.0f, 1.0f),
+                              juce::jmap(features.psycho.sharpnessAcum, 1.30f, 2.20f, 0.0f, 1.0f))));
+
+    // Decks with Dolby HX Pro keep HF headroom, so they tolerate more
+    // pre-emphasis before backing off; without HX Pro we start backing off
+    // sooner. backoff reaches 1.0 (lift fully disengaged) on very HF-hot program.
+    const float relief = profile.emulateHxPro ? 0.30f : 0.0f;
+    const float backoff = juce::jlimit(0.0f, 1.0f, (hfHot - relief) / (1.0f - relief));
+
+    float hxScale = 1.0f;
+    if (profile.softwareHxPro)
+    {
+        hxScale = computeSoftwareHxProScale(buffer, sampleRate);
+
+        const float levelHot = juce::jlimit(0.0f, 1.0f,
+            juce::jmap(features.integratedLUFS,
+                       profile.maxIntegratedLUFS - 0.5f,
+                       profile.maxIntegratedLUFS + 2.5f,
+                       0.0f,
+                       1.0f));
+        const float peakHot = juce::jlimit(0.0f, 1.0f,
+            juce::jmap(features.truePeakDbfs,
+                       profile.truePeakCeilingDbfs - 2.5f,
+                       profile.truePeakCeilingDbfs + 0.5f,
+                       0.0f,
+                       1.0f));
+        hxScale *= 1.0f - 0.50f * juce::jmax(levelHot, peakHot);
+        hxScale = juce::jlimit(0.30f, 1.0f, hxScale);
+    }
+
+    const float boostDb = profile.recordHfPreEmphasisDb * (1.0f - backoff) * hxScale;
+    const float boostDb2 = profile.recordHfPreEmphasisDb2 * (1.0f - backoff) * hxScale;
+    if (boostDb < 0.1f && boostDb2 < 0.1f)
+        return;
+
+    const float cornerHz = juce::jlimit(3500.0f, 9000.0f, profile.recordHfPreEmphasisHz);
+    if (boostDb >= 0.1f)
+        applyShelfGain(buffer, sampleRate, true, cornerHz, boostDb, 0.5f);
+
+    if (boostDb2 >= 0.1f)
+    {
+        const float cornerHz2 = juce::jlimit(6500.0f, 12000.0f, profile.recordHfPreEmphasisHz2);
+        applyShelfGain(buffer, sampleRate, true, cornerHz2, boostDb2, 0.45f);
+    }
+
+    // Keep the lift within the tape's reproducible band: don't waste bias budget
+    // (or amplify hiss) above the HF ceiling the tape can actually hold.
+    const float ceilingHz = juce::jlimit(9000.0f, 19000.0f, profile.hfHeadroomKhz * 1000.0f);
+    if (ceilingHz < static_cast<float>(sampleRate) * 0.5f - 1500.0f)
+    {
+        BiquadFilter ceiling(ceilingHz, 0.707f, FilterType::LowPass);
+        ceiling.prepare(sampleRate, buffer.getNumSamples(), buffer.getNumChannels());
+        ceiling.process(buffer);
     }
 }
 
@@ -388,6 +504,12 @@ void CassetteAutoMaster::processTrack(juce::AudioBuffer<float>& buffer,
         onnxModel.setProfile(profile);
         onnxModel.process(buffer);
     }
+
+    // Record-side HF pre-emphasis runs in every mode (including maximumDigital),
+    // because the physical tape rolls off the top end regardless of how clean the
+    // transfer chain is. Placed after dynamic HF taming so harshness is controlled
+    // first, then the broadband treble is restored toward the digital source.
+    applyRecordHfPreEmphasis(buffer, profile, features, sampleRate);
 
     if (!options.maximumDigital && features.noiseFloorDbfs > -50.0f)
     {

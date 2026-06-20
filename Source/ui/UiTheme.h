@@ -155,6 +155,8 @@ struct Theme
         box.setColour(juce::ComboBox::arrowColourId, textSecondary());
         box.setColour(juce::PopupMenu::backgroundColourId, card());
         box.setColour(juce::PopupMenu::textColourId, textPrimary());
+        box.setColour(juce::PopupMenu::highlightedBackgroundColourId, accent().withAlpha(0.14f));
+        box.setColour(juce::PopupMenu::highlightedTextColourId, accent());
     }
 
     static void styleAccentSlider(juce::Slider& slider)

@@ -14,7 +14,7 @@ fi
 
 echo "=== macOS Release ==="
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DCASSETTE_BUILD_TESTS=ON
-cmake --build build --config Release -j"$(sysctl -n hw.ncpu 2>/dev/null || echo 4)"
+cmake --build build --config Release --target Deck DeckTests -j"$(sysctl -n hw.ncpu 2>/dev/null || echo 4)"
 ctest --test-dir build --output-on-failure
 
 APP_NAME="Deck"
