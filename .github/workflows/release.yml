@@ -17,6 +17,7 @@ jobs:
 
       - name: Configure and build
         run: |
+          python3 -m pip install --user Pillow
           cmake -B build -DCMAKE_BUILD_TYPE=Release -DCASSETTE_BUILD_TESTS=ON
           cmake --build build --config Release --target Deck DeckTests -j3
           ctest --test-dir build --output-on-failure
