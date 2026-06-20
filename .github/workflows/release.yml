@@ -18,7 +18,7 @@ jobs:
       - name: Configure and build
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Release -DCASSETTE_BUILD_TESTS=ON
-          cmake --build build --config Release -j3
+          cmake --build build --config Release --target Deck DeckTests -j3
           ctest --test-dir build --output-on-failure
 
       - name: Package zip
@@ -40,7 +40,7 @@ jobs:
       - name: Configure and build (MSVC)
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Release -DCASSETTE_BUILD_TESTS=OFF
-          cmake --build build --config Release -j 3
+          cmake --build build --config Release --target Deck -j 3
 
       - name: Package zip
         shell: pwsh
@@ -58,8 +58,38 @@ jobs:
           path: Deck-Windows.zip
           retention-days: 14
 
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build pkg-config \
+            libasound2-dev libfreetype6-dev libfontconfig1-dev libcurl4-openssl-dev \
+            libx11-dev libxrandr-dev libxcursor-dev libxinerama-dev libxext-dev libxrender-dev \
+            libgl-dev libglu1-mesa-dev
+
+      - name: Configure and build
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCASSETTE_BUILD_TESTS=OFF
+          cmake --build build --target Deck --parallel
+
+      - name: Package tarball
+        run: |
+          VERSION="$(sed -n 's/^project(Deck VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)"
+          ./scripts/package_linux.sh build Release "$VERSION"
+          cp "dist/Deck-${VERSION}-Linux.tar.gz" Deck-Linux.tar.gz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Deck-Linux
+          path: Deck-Linux.tar.gz
+          retention-days: 14
+
   release:
-    needs: [macos, windows]
+    needs: [macos, windows, linux]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
@@ -70,8 +100,10 @@ jobs:
 
       - name: Collect release assets
         run: |
-          find artifacts -name '*.zip' -exec cp {} . \;
-          ls -la *.zip
+          find artifacts -name 'Deck-macOS.zip' -exec cp {} . \;
+          find artifacts -name 'Deck-Windows.zip' -exec cp {} . \;
+          find artifacts -name 'Deck-Linux.tar.gz' -exec cp {} . \;
+          ls -la Deck-macOS.zip Deck-Windows.zip Deck-Linux.tar.gz
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -80,3 +112,4 @@ jobs:
           files: |
             Deck-macOS.zip
             Deck-Windows.zip
+            Deck-Linux.tar.gz
