@@ -12,6 +12,7 @@ option(CASSETTE_BUILD_GSTPEAQ "Enable GstPEAQ runtime ODG (needs gstreamer at ru
 option(CASSETTE_BUILD_TESTS "Build mastering adequacy tests" ON)
 option(CASSETTE_BUILD_PLUGIN "Build VST3/AU Cassette Tape Prep plugin" OFF)
 option(CASSETTE_BUILD_BURNER "Build CassetteBurner timeline app" OFF)
+option(CASSETTE_SKIP_APP_ICON "Skip squircle icon post-processing (CI/minimal builds)" OFF)
 
 include(FetchContent)
 
@@ -128,11 +129,20 @@ juce_generate_juce_header(Deck)
 
 # JUCE rebuilds a square Icon.icns from AppIcon.png; restore squircle after each link.
 if(APPLE)
+    if(NOT CASSETTE_SKIP_APP_ICON)
+        add_custom_command(
+            TARGET Deck
+            POST_BUILD
+            COMMAND /bin/bash "${CMAKE_SOURCE_DIR}/scripts/apply_app_icon.sh"
+                    "$<TARGET_FILE_DIR:Deck>/../.."
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+            COMMENT "Applying squircle Dock icon"
+        )
+    endif()
+
     add_custom_command(
         TARGET Deck
         POST_BUILD
-        COMMAND /bin/bash "${CMAKE_SOURCE_DIR}/scripts/apply_app_icon.sh"
-                "$<TARGET_FILE_DIR:Deck>/../.."
         COMMAND ${CMAKE_COMMAND} -E make_directory
                 "$<TARGET_FILE_DIR:Deck>/../Resources/scripts"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -144,7 +154,7 @@ if(APPLE)
                 "${CMAKE_SOURCE_DIR}/models/tape_stn.onnx"
                 "$<TARGET_FILE_DIR:Deck>/../Resources/models/tape_stn.onnx"
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-        COMMENT "Applying squircle Dock icon + GstPEAQ script"
+        COMMENT "Bundling GstPEAQ script and optional STN model (macOS)"
     )
 endif()
 

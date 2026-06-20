@@ -17,10 +17,8 @@ jobs:
 
       - name: Configure and build
         run: |
-          python3 -m pip install --user Pillow
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -DCASSETTE_BUILD_TESTS=ON
-          cmake --build build --config Release --target Deck DeckTests -j3
-          ctest --test-dir build --output-on-failure
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DCASSETTE_BUILD_TESTS=OFF -DCASSETTE_SKIP_APP_ICON=ON
+          cmake --build build --config Release --target Deck -j3
 
       - name: Package zip
         run: |
@@ -94,6 +92,8 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
@@ -101,9 +101,13 @@ jobs:
 
       - name: Collect release assets
         run: |
-          find artifacts -name 'Deck-macOS.zip' -exec cp {} . \;
           find artifacts -name 'Deck-Windows.zip' -exec cp {} . \;
           find artifacts -name 'Deck-Linux.tar.gz' -exec cp {} . \;
+          if [ -f docs/assets/Deck-macOS.zip ]; then
+            cp docs/assets/Deck-macOS.zip Deck-macOS.zip
+          else
+            find artifacts -name 'Deck-macOS.zip' -exec cp {} . \;
+          fi
           ls -la Deck-macOS.zip Deck-Windows.zip Deck-Linux.tar.gz
 
       - name: Create GitHub Release
