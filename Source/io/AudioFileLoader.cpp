@@ -17,7 +17,12 @@ juce::AudioFormatManager& AudioFileLoader::getFormatManager()
 
 juce::String AudioFileLoader::importFileWildcard()
 {
-    return "*.wav;*.flac;*.aiff;*.aif;*.ogg";
+    return "*.wav;*.flac;*.aiff;*.aif;*.ogg;*.mp3";
+}
+
+juce::String AudioFileLoader::supportedFormatsLabel()
+{
+    return "WAV, FLAC, AIFF, OGG, MP3";
 }
 
 juce::File AudioFileLoader::normaliseDroppedPath(const juce::String& path)
@@ -91,7 +96,7 @@ LoadResult AudioFileLoader::loadToBufferWithDiagnostics(const juce::File& file)
 
     if (!isSupportedAudioFile(file))
     {
-        result.error = "Unsupported format (use WAV, FLAC, AIFF, OGG)";
+        result.error = "Unsupported format (use " + supportedFormatsLabel() + ")";
         return result;
     }
 

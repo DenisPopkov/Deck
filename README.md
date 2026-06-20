@@ -17,7 +17,7 @@
 - **Сборка микстейпа** — распределение треков по сторонам A и B, порядок, проверка, что все помещается на ленту.
 - **Экспорт** — true-peak лимитирование, EQ с учетом кассеты, опциональные тестовые тоны; на выходе WAV для записи на деку.
 
-Поддерживаемые форматы импорта: WAV, FLAC, AIFF, OGG. Экспорт — WAV. DAW не нужен.
+Поддерживаемые форматы импорта: WAV, FLAC, AIFF, OGG, MP3. Экспорт — WAV. DAW не нужен.
 
 ### Скачать
 
@@ -196,7 +196,7 @@ Assets/          Иконка приложения
 - **Mixtape building** — split tracks across Side A and B, reorder tracks, and check cassette fit.
 - **Export** — true-peak limiting, cassette-aware EQ, optional preflight tones; output is WAV for deck recording.
 
-Supported input formats: WAV, FLAC, AIFF, OGG. Export format: WAV. No DAW required.
+Supported input formats: WAV, FLAC, AIFF, OGG, MP3. Export format: WAV. No DAW required.
 
 ### Download
 

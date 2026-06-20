@@ -1,5 +1,6 @@
 #include "CompareWaveformDisplay.h"
 #include "UiTheme.h"
+#include "../io/AudioFileLoader.h"
 
 namespace cassette
 {
@@ -135,7 +136,7 @@ void CompareWaveformDisplay::drawDragOverlay(juce::Graphics& g) const
     g.drawRect(bounds.reduced(2), 2);
 
     juce::String headline = "Drop audio file to import";
-    juce::String detail = "WAV, FLAC, AIFF, OGG";
+    juce::String detail = AudioFileLoader::supportedFormatsLabel();
     if (dropKind == DropPayloadKind::Folder)
     {
         headline = "Drop folder for mixtape";

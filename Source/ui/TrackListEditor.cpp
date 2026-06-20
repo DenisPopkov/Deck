@@ -210,20 +210,43 @@ void TrackListEditor::MiniPlayerBar::sliderValueChanged(juce::Slider* slider)
     if (slider != &seekSlider || seekFromPlayback)
         return;
 
+    if (owner.miniPlayerSeekDragging)
+    {
+        owner.updateMiniPlayerUi();
+        return;
+    }
+
     owner.previewPlayback.setPositionSec(seekSlider.getValue());
     owner.updateMiniPlayerUi();
 }
 
 void TrackListEditor::MiniPlayerBar::sliderDragStarted(juce::Slider* slider)
 {
-    if (slider == &seekSlider)
-        owner.miniPlayerSeekDragging = true;
+    if (slider != &seekSlider)
+        return;
+
+    owner.miniPlayerSeekDragging = true;
+    owner.resumePlaybackAfterSeek = owner.previewPlayback.isPlaying();
+    if (owner.resumePlaybackAfterSeek)
+        owner.previewPlayback.pause();
+    owner.updateMiniPlayerUi();
 }
 
 void TrackListEditor::MiniPlayerBar::sliderDragEnded(juce::Slider* slider)
 {
-    if (slider == &seekSlider)
-        owner.miniPlayerSeekDragging = false;
+    if (slider != &seekSlider)
+        return;
+
+    owner.previewPlayback.setPositionSec(seekSlider.getValue());
+    owner.miniPlayerSeekDragging = false;
+
+    if (owner.resumePlaybackAfterSeek)
+    {
+        owner.previewPlayback.play();
+        owner.resumePlaybackAfterSeek = false;
+    }
+
+    owner.updateMiniPlayerUi();
 }
 
 void TrackListEditor::MiniPlayerBar::setVisible(bool shouldBeVisible)
@@ -342,7 +365,9 @@ int TrackListEditor::SideList::hitTestRow(juce::Point<int> pos) const
 
 juce::Rectangle<int> TrackListEditor::SideList::rowBounds(int row) const
 {
-    return { 4, 4 + row * kRowH, getWidth() - 8, kRowH - 2 };
+    static constexpr int kRowInnerH = kRowH - 2;
+    const int y = 4 + row * kRowH + (kRowH - kRowInnerH) / 2;
+    return { kSideListInset, y, getWidth() - 2 * kSideListInset, kRowInnerH };
 }
 
 juce::Rectangle<int> TrackListEditor::SideList::checkboxBounds(int row) const
@@ -458,14 +483,19 @@ void TrackListEditor::SideList::paintRow(juce::Graphics& g, int row, juce::Recta
     const bool selected = row == selectedRow;
     const bool hover = row == hoverRow;
     const bool checked = isChecked(row);
-    const bool sourceDrag = dragging && row == dragSourceRow;
-    const bool insertBefore = dragging && dropInsertRow == row && dragSourceRow != row;
+    const bool sourceDrag = (dragging && row == dragSourceRow)
+                            || (owner.dragActive && owner.dragSourceSide == sideIndex
+                                && row == owner.dragSourceRow);
+    const bool sameSideInsert = dragging && dropInsertRow == row && dragSourceRow != row;
+    const bool crossSideInsert = owner.dragActive && owner.crossDropSide == sideIndex
+                                 && owner.crossDropRow == row && owner.dragSourceSide != sideIndex;
+    const bool insertBefore = sameSideInsert || crossSideInsert;
     const bool isCurrentTrack = owner.playingSide == sideIndex && owner.playingRow == row
                                   && owner.miniPlayerVisible;
     const bool isPlayingRow = isCurrentTrack && owner.previewPlayback.isPlaying();
 
     const bool highlighted = hover || checked || isCurrentTrack;
-    auto rowArea = area.reduced(0, 1);
+    const auto rowArea = area;
     g.setColour(sourceDrag ? Theme::card().withAlpha(0.4f)
                            : (highlighted ? Theme::sidebarHighlight() : Theme::card()));
     g.fillRoundedRectangle(rowArea.toFloat(), 4.0f);
@@ -485,10 +515,8 @@ void TrackListEditor::SideList::paintRow(juce::Graphics& g, int row, juce::Recta
     const auto playArea = content.removeFromLeft(kPlayW);
     if (isPlayingRow)
         drawPauseIcon(g, playArea, Theme::accent());
-    else if (isCurrentTrack)
-        drawPlayIcon(g, playArea, Theme::accent());
     else
-        drawPlayIcon(g, playArea, Theme::accent().withAlpha(hover ? 1.0f : 0.75f));
+        drawPlayIcon(g, playArea, Theme::accent());
 
     auto indexArea = content.removeFromLeft(26);
     g.setColour(Theme::textMuted());
@@ -509,7 +537,13 @@ void TrackListEditor::SideList::paint(juce::Graphics& g)
 {
     using namespace ui;
 
-    Theme::drawCard(g, getLocalBounds(), juce::String());
+    if (owner.dragActive && owner.crossDropSide == sideIndex)
+    {
+        g.setColour(Theme::accent().withAlpha(0.08f));
+        g.fillRect(getLocalBounds());
+        g.setColour(Theme::accent().withAlpha(0.35f));
+        g.drawRect(getLocalBounds(), 1);
+    }
 
     if (owner.controller == nullptr)
         return;
@@ -521,11 +555,17 @@ void TrackListEditor::SideList::paint(juce::Graphics& g)
     for (int row = firstRow; row <= lastRow; ++row)
         paintRow(g, row, rowBounds(row));
 
-    if (dragging && dropInsertRow == count)
+    const int endDropRow = (dragging && owner.dragSourceSide == sideIndex) ? dropInsertRow
+                          : (owner.crossDropSide == sideIndex) ? owner.crossDropRow
+                                                               : -1;
+    if (owner.dragActive && endDropRow == count && count > 0)
     {
         const auto lineY = rowBounds(count - 1).getBottom() + 1;
         g.setColour(Theme::accent());
-        g.fillRect(4, lineY, getWidth() - 8, 2);
+        g.fillRect(TrackListEditor::kSideListInset,
+                   lineY,
+                   getWidth() - 2 * TrackListEditor::kSideListInset,
+                   2);
     }
 
     if (count == 0)
@@ -563,7 +603,10 @@ void TrackListEditor::SideList::showContextMenu(int row)
         else if (result == 2)
         {
             if (owner.controller->moveToSide(sideIndex, row, otherSide, 9999))
+            {
+                owner.resetPlaybackAfterTrackLayoutChange();
                 owner.layoutChanged();
+            }
         }
         else if (result == 3)
         {
@@ -598,34 +641,51 @@ void TrackListEditor::SideList::mouseDown(const juce::MouseEvent& e)
         return;
     }
 
-    if (isPlayHit(e.getPosition(), row))
-    {
-        owner.playTrack(sideIndex, row);
-        return;
-    }
-
-    if (!rowBounds(row).contains(e.getPosition()))
-        return;
-
     selectedRow = row;
-    dragSourceRow = row;
-    dropInsertRow = row;
-    dragging = true;
-    owner.setDragActive(true);
-    repaint();
+    pendingDragRow = row;
+    pendingDrag = true;
+    dragStartPos = e.getPosition();
 }
 
 void TrackListEditor::SideList::mouseDrag(const juce::MouseEvent& e)
 {
-    if (!dragging || owner.controller == nullptr)
+    if (owner.controller == nullptr)
+        return;
+
+    if (pendingDrag && !dragging)
+    {
+        if (e.getPosition().getDistanceFrom(dragStartPos) < kDragThreshold)
+            return;
+
+        dragging = true;
+        pendingDrag = false;
+        dragSourceRow = pendingDragRow;
+        dropInsertRow = dragSourceRow;
+        owner.dragSourceSide = sideIndex;
+        owner.dragSourceRow = dragSourceRow;
+        owner.setDragActive(true);
+    }
+
+    if (!dragging)
         return;
 
     dropInsertRow = rowAtY(e.y);
+    owner.crossDropSide = -1;
+    owner.crossDropRow = -1;
 
     auto& other = sideIndex == 0 ? owner.sideBList : owner.sideAList;
     const auto otherPos = e.getEventRelativeTo(&other).getPosition();
     if (other.getLocalBounds().contains(otherPos))
-        other.dropInsertRow = other.rowAtY(otherPos.y);
+    {
+        const int otherSide = sideIndex == 0 ? 1 : 0;
+        owner.crossDropSide = otherSide;
+        owner.crossDropRow = other.rowAtY(otherPos.y);
+        other.dropInsertRow = owner.crossDropRow;
+    }
+    else
+    {
+        other.dropInsertRow = -1;
+    }
 
     const bool trashHover = owner.trashContains(e.getEventRelativeTo(&owner).getPosition());
     owner.trashZone.setActive(true, trashHover);
@@ -635,6 +695,14 @@ void TrackListEditor::SideList::mouseDrag(const juce::MouseEvent& e)
 
 void TrackListEditor::SideList::mouseUp(const juce::MouseEvent& e)
 {
+    if (pendingDrag && !dragging)
+    {
+        pendingDrag = false;
+        if (owner.controller != nullptr && !owner.selectionMode)
+            owner.playTrack(sideIndex, pendingDragRow);
+        return;
+    }
+
     if (!dragging || owner.controller == nullptr)
         return;
 
@@ -656,10 +724,7 @@ void TrackListEditor::SideList::mouseUp(const juce::MouseEvent& e)
             --target;
         target = juce::jlimit(0, getTrackCount() - 1, target);
         if (target != dragSourceRow)
-        {
             changed = owner.controller->reorderWithinSide(sideIndex, dragSourceRow, target);
-            selectedRow = target;
-        }
     }
     else
     {
@@ -668,16 +733,19 @@ void TrackListEditor::SideList::mouseUp(const juce::MouseEvent& e)
         if (other.getLocalBounds().contains(otherPos))
         {
             const int otherSide = sideIndex == 0 ? 1 : 0;
-            const int insertRow = juce::jlimit(0, other.getTrackCount(), other.rowAtY(otherPos.y));
+            const int insertRow = owner.crossDropSide == otherSide
+                                      ? juce::jlimit(0, other.getTrackCount(), owner.crossDropRow)
+                                      : juce::jlimit(0, other.getTrackCount(), other.rowAtY(otherPos.y));
             changed = owner.controller->moveToSide(sideIndex, dragSourceRow, otherSide, insertRow);
-            other.setSelectedRow(juce::jlimit(0, juce::jmax(0, other.getTrackCount() - 1), insertRow));
-            selectedRow = -1;
         }
     }
 
     owner.endDrag();
     if (changed)
+    {
+        owner.resetPlaybackAfterTrackLayoutChange();
         owner.layoutChanged();
+    }
     refresh();
 }
 
@@ -771,6 +839,8 @@ TrackListEditor::TrackListEditor()
     Theme::styleCombo(cassetteSelector);
     Theme::applyLabel(sideALabel, Theme::sectionFont(), Theme::accent());
     Theme::applyLabel(sideBLabel, Theme::sectionFont(), Theme::accent());
+    sideALabel.setBorderSize(juce::BorderSize<int>());
+    sideBLabel.setBorderSize(juce::BorderSize<int>());
     Theme::applyLabel(loadingLabel, Theme::sectionFont(), Theme::textSecondary(), juce::Justification::centred);
     loadingLabel.setText("Loading tracks...", juce::dontSendNotification);
 
@@ -912,6 +982,12 @@ void TrackListEditor::setDragActive(bool active)
 void TrackListEditor::endDrag()
 {
     dragActive = false;
+    dragSourceSide = -1;
+    dragSourceRow = -1;
+    crossDropSide = -1;
+    crossDropRow = -1;
+    sideAList.pendingDrag = false;
+    sideBList.pendingDrag = false;
     sideAList.dragging = false;
     sideBList.dragging = false;
     sideAList.dragSourceRow = -1;
@@ -989,8 +1065,11 @@ void TrackListEditor::confirmAndDeleteSelected()
 
         if (controller->deleteTracks(items))
         {
+            stopPlaybackIfTracksRemoved(items);
             sideAList.clearChecked();
             sideBList.clearChecked();
+            sideAList.setSelectedRow(-1);
+            sideBList.setSelectedRow(-1);
             layoutChanged();
             setSelectionMode(false);
         }
@@ -1051,11 +1130,58 @@ void TrackListEditor::hideMiniPlayer()
     playingRow = -1;
     miniPlayerVisible = false;
     miniPlayerSeekDragging = false;
+    resumePlaybackAfterSeek = false;
     miniPlayer.setVisible(false);
     stopTimer();
+    sideAList.setSelectedRow(-1);
+    sideBList.setSelectedRow(-1);
     resized();
     sideAList.repaint();
     sideBList.repaint();
+}
+
+void TrackListEditor::stopPlaybackIfTracksRemoved(const std::vector<std::pair<int, int>>& removed)
+{
+    if (!miniPlayerVisible || playingSide < 0 || playingRow < 0)
+        return;
+
+    for (const auto& [side, row] : removed)
+    {
+        if (side == playingSide && row == playingRow)
+        {
+            hideMiniPlayer();
+            return;
+        }
+    }
+
+    int removedBefore = 0;
+    for (const auto& [side, row] : removed)
+    {
+        if (side == playingSide && row < playingRow)
+            ++removedBefore;
+    }
+
+    if (removedBefore > 0)
+        playingRow -= removedBefore;
+}
+
+void TrackListEditor::resetPlaybackAfterTrackLayoutChange()
+{
+    hideMiniPlayer();
+    sideAList.setSelectedRow(-1);
+    sideBList.setSelectedRow(-1);
+    sideAList.clearHover();
+    sideBList.clearHover();
+}
+
+void TrackListEditor::validatePlaybackState()
+{
+    if (!miniPlayerVisible || controller == nullptr || playingSide < 0 || playingRow < 0)
+        return;
+
+    const auto& tracks = playingSide == 0 ? controller->sideA() : controller->sideB();
+    if (playingRow >= static_cast<int>(tracks.size()))
+        hideMiniPlayer();
 }
 
 void TrackListEditor::updateMiniPlayerUi()
@@ -1075,7 +1201,7 @@ void TrackListEditor::updateMiniPlayerUi()
     miniPlayer.trackLabel.setText(title, juce::dontSendNotification);
     miniPlayer.timeLabel.setText(formatClock(positionSec) + " / " + formatClock(lengthSec),
                                  juce::dontSendNotification);
-    miniPlayer.playPauseButton.setButtonText(previewPlayback.isPlaying() ? "||" : ">");
+    miniPlayer.playPauseButton.setButtonText(previewPlayback.isPlaying() || resumePlaybackAfterSeek ? "||" : ">");
 
     if (!miniPlayerSeekDragging)
         miniPlayer.setSeekFromPlayback(positionSec, lengthSec);
@@ -1140,6 +1266,8 @@ void TrackListEditor::refresh()
 
     sideAList.refresh();
     sideBList.refresh();
+    validatePlaybackState();
+    resized();
 }
 
 void TrackListEditor::resized()
@@ -1172,21 +1300,27 @@ void TrackListEditor::resized()
     if (cassetteSelector.isVisible())
     {
         auto toolbar = area.removeFromTop(kToolbarH);
-        cassetteSelector.setBounds(toolbar.removeFromLeft(160));
-        area.removeFromTop(4);
+        cassetteSelector.setBounds(toolbar.removeFromLeft(juce::jmin(180, toolbar.getWidth())).reduced(0, 3));
+        area.removeFromTop(6);
     }
 
     auto header = area.removeFromTop(20);
     const int gap = 10;
     const int colW = (header.getWidth() - gap) / 2;
-    sideALabel.setBounds(header.getX(), header.getY(), colW, 18);
-    sideBLabel.setBounds(header.getX() + colW + gap, header.getY(), colW, 18);
+    sideALabel.setBounds(header.getX() + kSideHeaderInset,
+                         header.getY(),
+                         colW - kSideHeaderInset,
+                         header.getHeight());
+    sideBLabel.setBounds(header.getX() + colW + gap + kSideHeaderInset,
+                         header.getY(),
+                         colW - kSideHeaderInset,
+                         header.getHeight());
     area.removeFromTop(4);
 
     sideAViewport.setBounds(area.getX(), area.getY(), colW, area.getHeight());
     sideBViewport.setBounds(area.getX() + colW + gap, area.getY(), colW, area.getHeight());
-    sideAList.setSize(colW - 4, sideAList.getContentHeight());
-    sideBList.setSize(colW - 4, sideBList.getContentHeight());
+    sideAList.setSize(colW, sideAList.getContentHeight());
+    sideBList.setSize(colW, sideBList.getContentHeight());
 }
 
 void TrackListEditor::paint(juce::Graphics& g)

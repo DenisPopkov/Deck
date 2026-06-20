@@ -22,6 +22,10 @@ FetchContent_Declare(
     GIT_TAG 8.0.4
     GIT_SHALLOW TRUE
 )
+
+# JUCE built-in MP3 decoder (cross-platform). Legal responsibility is on the app publisher.
+add_compile_definitions(JUCE_USE_MP3AUDIOFORMAT=1)
+
 FetchContent_MakeAvailable(JUCE)
 
 include(cmake/CassetteCore.cmake)

@@ -134,6 +134,11 @@ private:
         int dragSourceRow = -1;
         int dropInsertRow = -1;
         bool dragging = false;
+        bool pendingDrag = false;
+        int pendingDragRow = -1;
+        juce::Point<int> dragStartPos;
+
+        static constexpr int kDragThreshold = 6;
 
     private:
         int getTrackCount() const;
@@ -176,6 +181,9 @@ private:
     void playTrack(int sideIndex, int row);
     void hideMiniPlayer();
     void updateMiniPlayerUi();
+    void stopPlaybackIfTracksRemoved(const std::vector<std::pair<int, int>>& removed);
+    void validatePlaybackState();
+    void resetPlaybackAfterTrackLayoutChange();
     void updateDeleteButtonState();
     int totalCheckedCount() const;
     std::vector<std::pair<int, int>> collectCheckedTracks() const;
@@ -184,6 +192,10 @@ private:
     MixtapeEditController* controller = nullptr;
     TapeLengthSpec tape;
     bool dragActive = false;
+    int dragSourceSide = -1;
+    int dragSourceRow = -1;
+    int crossDropSide = -1;
+    int crossDropRow = -1;
     bool loading = false;
     bool ownsAudioDevice = false;
     bool selectionMode = false;
@@ -207,11 +219,16 @@ private:
     int playingRow = -1;
     bool miniPlayerVisible = false;
     bool miniPlayerSeekDragging = false;
+    bool resumePlaybackAfterSeek = false;
 
     static constexpr int kToolbarH = 30;
     static constexpr int kFooterH = 44;
     static constexpr int kMiniPlayerH = 56;
     static constexpr int kTrashH = 48;
+    static constexpr int kSideListInset = 4;
+    static constexpr int kRowContentInset = 8;
+    static constexpr int kPlayIconLeftOffset = 8; // kPlayW / 2 - 4
+    static constexpr int kSideHeaderInset = kSideListInset + kRowContentInset + kPlayIconLeftOffset;
 };
 
 } // namespace cassette

@@ -23,6 +23,7 @@ public:
     static juce::AudioFormatManager& getFormatManager();
 
     static juce::String importFileWildcard();
+    static juce::String supportedFormatsLabel();
 
     static juce::File normaliseDroppedPath(const juce::String& path);
 

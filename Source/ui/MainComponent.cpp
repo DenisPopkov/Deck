@@ -37,6 +37,15 @@ MainComponent::MainComponent()
     tapeSetupPanel.setCompactToolbarMode(true);
     tapeSetupPanel.setMixtapeMode(false);
     tapeSetupPanel.onSetupChanged = [this] {
+        const auto tape = tapeSetup().getTapeLengthSpec();
+        if (mixtapeModeActive && folderScan.has_value() && folderScan->success)
+        {
+            const bool editorActive = !mixtapeEditor.sideA().empty() || !mixtapeEditor.sideB().empty();
+            if (editorActive)
+                mixtapeEditor.syncCassettePlan(tape);
+            trackListEditor.setTapeSpec(tape);
+            trackListEditor.refresh();
+        }
         refreshFolderFitLabel();
         if (mixtapeModeActive && hasProcessed)
             invalidatePreparedOutput();
@@ -496,7 +505,8 @@ void MainComponent::pickFolder()
                              else if (AudioFileLoader::isSupportedAudioFile(picked))
                                  loadAudioFile(picked);
                              else
-                                 setStatus("Unsupported format (use WAV, FLAC, AIFF, OGG)", ui::Theme::warnAmber());
+                                 setStatus("Unsupported format (use " + AudioFileLoader::supportedFormatsLabel() + ")",
+                                           ui::Theme::warnAmber());
                          });
 }
 
@@ -511,10 +521,8 @@ void MainComponent::refreshFolderFitLabel()
 
     const auto tape = tapeSetup().getTapeLengthSpec();
     const bool editorActive = !mixtapeEditor.sideA().empty() || !mixtapeEditor.sideB().empty();
-    const auto report = editorActive
-                            ? (mixtapeEditor.getCassetteCount() > 1 ? mixtapeEditor.computeFullFit(tape)
-                                                                    : mixtapeEditor.computeFit(tape))
-                            : FolderMixBuilder::analyzeFit(*folderScan, tape);
+    const auto report = editorActive ? mixtapeEditor.computeFullFit(tape)
+                                     : FolderMixBuilder::analyzeFit(*folderScan, tape);
 
     folderFitOk = editorActive ? mixtapeEditor.canPrepare(tape) : report.fits;
     mixtapePanel.setFitReport(report.summary(), folderFitOk);
