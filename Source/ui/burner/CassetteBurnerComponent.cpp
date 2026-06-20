@@ -138,6 +138,7 @@ CassetteBurnerComponent::CassetteBurnerComponent()
 
 CassetteBurnerComponent::~CassetteBurnerComponent()
 {
+    trackListEditor.shutdownPreviewAudio();
     deviceManager.removeAudioCallback(this);
     audioPlayer.setSource(nullptr);
     deviceManager.closeAudioDevice();

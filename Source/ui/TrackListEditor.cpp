@@ -71,15 +71,25 @@ void TrackListEditor::TrackPreviewPlayback::attach(juce::AudioDeviceManager& dev
     deviceManager->addAudioCallback(&player);
 }
 
-void TrackListEditor::TrackPreviewPlayback::detach()
+void TrackListEditor::TrackPreviewPlayback::shutdown()
 {
-    stop();
+    transport.stop();
+    transport.setSource(nullptr);
+    readerSource.reset();
+
     if (deviceManager != nullptr)
     {
         deviceManager->removeAudioCallback(&player);
         deviceManager = nullptr;
     }
+
     player.setSource(nullptr);
+    trackName.clear();
+}
+
+void TrackListEditor::TrackPreviewPlayback::detach()
+{
+    shutdown();
 }
 
 bool TrackListEditor::TrackPreviewPlayback::loadFile(const juce::File& file)
@@ -780,9 +790,17 @@ TrackListEditor::~TrackListEditor()
 {
     juce::Desktop::getInstance().removeFocusChangeListener(this);
     stopTimer();
-    previewPlayback.detach();
+    shutdownPreviewAudio();
+}
+
+void TrackListEditor::shutdownPreviewAudio()
+{
+    previewPlayback.shutdown();
     if (ownsAudioDevice)
+    {
         ownedDeviceManager.closeAudioDevice();
+        ownsAudioDevice = false;
+    }
 }
 
 void TrackListEditor::attachToAudioDevice(juce::AudioDeviceManager& deviceManager)

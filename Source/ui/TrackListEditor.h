@@ -26,6 +26,7 @@ public:
     void refresh();
     void setLoading(bool loading);
     void attachToAudioDevice(juce::AudioDeviceManager& deviceManager);
+    void shutdownPreviewAudio();
 
     void setDragActive(bool active);
     bool isDragActive() const { return dragActive; }
@@ -42,6 +43,7 @@ private:
     public:
         void attach(juce::AudioDeviceManager& deviceManagerIn);
         void detach();
+        void shutdown();
 
         bool loadFile(const juce::File& file);
         void play();
@@ -60,9 +62,9 @@ private:
         void getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToFill) override;
 
     private:
-        juce::AudioTransportSource transport;
-        std::unique_ptr<juce::AudioFormatReaderSource> readerSource;
         juce::AudioSourcePlayer player;
+        std::unique_ptr<juce::AudioFormatReaderSource> readerSource;
+        juce::AudioTransportSource transport;
         juce::AudioDeviceManager* deviceManager = nullptr;
         juce::String trackName;
     };

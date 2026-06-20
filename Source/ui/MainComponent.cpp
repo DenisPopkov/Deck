@@ -89,6 +89,7 @@ MainComponent::MainComponent()
 MainComponent::~MainComponent()
 {
     stopTimer();
+    trackListEditor.shutdownPreviewAudio();
     previewDeviceManager.closeAudioDevice();
 }
 
