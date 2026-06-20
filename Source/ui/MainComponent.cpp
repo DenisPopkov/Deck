@@ -513,7 +513,7 @@ void MainComponent::pickImportFolder()
     auto chooser = std::make_shared<juce::FileChooser>(
         "Import folder",
         juce::File::getSpecialLocation(juce::File::userMusicDirectory),
-        AudioFileLoader::importFileWildcard());
+        importFolderChooserWildcard());
 
     chooser->launchAsync(importFolderChooserFlags(),
                          [this, chooser](const juce::FileChooser& fc) {

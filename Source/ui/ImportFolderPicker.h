@@ -9,23 +9,27 @@ namespace cassette
 inline int importFolderChooserFlags()
 {
 #if JUCE_WINDOWS
-    // Windows folder-picker mode hides files; use a normal open dialog instead.
-    return juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
+    // Native folder picker: choose a directory, not a single file.
+    return juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories;
 #else
+    // Finder / zenity: show audio files while browsing, still allow folder selection.
     return juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles
          | juce::FileBrowserComponent::canSelectDirectories;
 #endif
 }
 
+inline juce::String importFolderChooserWildcard()
+{
+#if JUCE_WINDOWS
+    return {};
+#else
+    return AudioFileLoader::importFileWildcard();
+#endif
+}
+
 inline juce::File folderFromImportPickerResult(const juce::File& picked)
 {
-    if (picked.isDirectory())
-        return picked;
-
-    if (picked.existsAsFile())
-        return picked.getParentDirectory();
-
-    return {};
+    return picked.isDirectory() ? picked : juce::File();
 }
 
 }

@@ -57,7 +57,7 @@ CassetteBurnerComponent::CassetteBurnerComponent()
     sidebar.onImportFolder = [this] {
         auto chooser = std::make_shared<juce::FileChooser>("Import folder",
                                                            juce::File(),
-                                                           AudioFileLoader::importFileWildcard());
+                                                           importFolderChooserWildcard());
         chooser->launchAsync(importFolderChooserFlags(),
                              [this, chooser](const juce::FileChooser& fc) {
                                  const auto folder = folderFromImportPickerResult(fc.getResult());

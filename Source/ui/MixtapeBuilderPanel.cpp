@@ -99,10 +99,10 @@ void MixtapeBuilderPanel::buttonClicked(juce::Button* b)
     if (b == &pickFolderButton)
     {
         auto chooser = std::make_shared<juce::FileChooser>(
-            "Import audio",
+            "Import folder",
             mixFolder.isDirectory() ? mixFolder
                                     : juce::File::getSpecialLocation(juce::File::userMusicDirectory),
-            AudioFileLoader::importFileWildcard());
+            importFolderChooserWildcard());
 
         chooser->launchAsync(importFolderChooserFlags(),
                              [this, chooser](const juce::FileChooser& fc) {
