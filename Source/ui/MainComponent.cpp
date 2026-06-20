@@ -1,5 +1,6 @@
 #include "MainComponent.h"
 #include "ConfirmDialog.h"
+#include "ImportFolderPicker.h"
 #include "UiTheme.h"
 #include <cmath>
 #include <memory>
@@ -511,13 +512,14 @@ void MainComponent::pickImportFolder()
 {
     auto chooser = std::make_shared<juce::FileChooser>(
         "Import folder",
-        juce::File::getSpecialLocation(juce::File::userMusicDirectory));
+        juce::File::getSpecialLocation(juce::File::userMusicDirectory),
+        AudioFileLoader::importFileWildcard());
 
-    chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
+    chooser->launchAsync(importFolderChooserFlags(),
                          [this, chooser](const juce::FileChooser& fc) {
-                             const auto picked = fc.getResult();
-                             if (picked.isDirectory())
-                                 scanMixFolder(picked);
+                             const auto folder = folderFromImportPickerResult(fc.getResult());
+                             if (folder.isDirectory())
+                                 scanMixFolder(folder);
                          });
 }
 

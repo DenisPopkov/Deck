@@ -1,4 +1,5 @@
 #include "CassetteBurnerComponent.h"
+#include "../ImportFolderPicker.h"
 #include "../look/CassetteBurnerLook.h"
 #include "../UiTheme.h"
 #include "../../project/SideRenderer.h"
@@ -56,13 +57,12 @@ CassetteBurnerComponent::CassetteBurnerComponent()
     sidebar.onImportFolder = [this] {
         auto chooser = std::make_shared<juce::FileChooser>("Import folder",
                                                            juce::File(),
-                                                           "*",
-                                                           true);
-        chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
+                                                           AudioFileLoader::importFileWildcard());
+        chooser->launchAsync(importFolderChooserFlags(),
                              [this, chooser](const juce::FileChooser& fc) {
-                                 const auto f = fc.getResult();
-                                 if (f.isDirectory())
-                                     scanFolderForEditor(f);
+                                 const auto folder = folderFromImportPickerResult(fc.getResult());
+                                 if (folder.isDirectory())
+                                     scanFolderForEditor(folder);
                              });
     };
     sidebar.onImportAudio = [this] {

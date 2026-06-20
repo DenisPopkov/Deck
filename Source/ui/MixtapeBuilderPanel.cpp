@@ -1,4 +1,5 @@
 #include "MixtapeBuilderPanel.h"
+#include "ImportFolderPicker.h"
 #include "UiTheme.h"
 #include "../io/AudioFileLoader.h"
 
@@ -103,11 +104,11 @@ void MixtapeBuilderPanel::buttonClicked(juce::Button* b)
                                     : juce::File::getSpecialLocation(juce::File::userMusicDirectory),
             AudioFileLoader::importFileWildcard());
 
-        chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
+        chooser->launchAsync(importFolderChooserFlags(),
                              [this, chooser](const juce::FileChooser& fc) {
-                                 const auto picked = fc.getResult();
-                                 if (picked.isDirectory() && onFolderSelected)
-                                     onFolderSelected(picked);
+                                 const auto folder = folderFromImportPickerResult(fc.getResult());
+                                 if (folder.isDirectory() && onFolderSelected)
+                                     onFolderSelected(folder);
                              });
     }
     else if (b == &buildButton && onBuildClicked)
