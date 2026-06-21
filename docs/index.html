@@ -130,15 +130,13 @@
           <details class="faq-item">
             <summary data-i18n="faq.q2">Which audio formats can I import?</summary>
             <div class="faq-answer">
-              <p data-i18n="faq.a2">WAV, FLAC, AIFF, and OGG. Export is WAV.</p>
+              <p data-i18n="faq.a2">WAV, FLAC, AIFF, OGG, and MP3. Export is WAV.</p>
             </div>
           </details>
 
           <details class="faq-item">
-            <summary data-i18n="faq.q3">MacOS says the app is from an unidentified developer</summary>
-            <div class="faq-answer">
-              <p data-i18n="faq.a3">Release builds are not notarized yet. Right-click <strong>Deck.app</strong> → <strong>Open</strong>, then confirm. You only need to do this once.</p>
-            </div>
+            <summary data-i18n="faq.q3">MacOS blocks Deck after download</summary>
+            <div class="faq-answer" data-i18n="faq.a3"></div>
           </details>
 
           <details class="faq-item">
@@ -153,6 +151,11 @@
             <div class="faq-answer">
               <p data-i18n="faq.a5">Yes. Import a folder, arrange tracks in the editor, check whether everything fits your tape length, then prepare and export.</p>
             </div>
+          </details>
+
+          <details class="faq-item">
+            <summary data-i18n="faq.q6">How does Prepare work?</summary>
+            <div class="faq-answer" data-i18n="faq.a6"></div>
           </details>
 
         </div>
@@ -206,13 +209,15 @@
           "faq.q1": "Do I need a DAW or plugin host?",
           "faq.a1": "No. Deck is a standalone desktop application. Import audio, prepare it, and export WAV — all in one window.",
           "faq.q2": "Which audio formats can I import?",
-          "faq.a2": "WAV, FLAC, AIFF, and OGG. Export is WAV.",
-          "faq.q3": "MacOS says the app is from an unidentified developer",
-          "faq.a3": "Release builds are not notarized yet. Right-click <strong>Deck.app</strong> → <strong>Open</strong>, then confirm. You only need to do this once.",
+          "faq.a2": "WAV, FLAC, AIFF, OGG, and MP3. Export is WAV.",
+          "faq.q3": "MacOS blocks Deck after download",
+          "faq.a3": "<p>Release builds are not notarized yet. Safari may show <strong>damaged</strong> or <strong>unidentified developer</strong> — the app is fine.</p><p><strong>Option 1:</strong> Right-click <strong>Deck.app</strong> → <strong>Open</strong> → confirm. Usually once is enough.</p><p><strong>Option 2:</strong> In Terminal, remove the download quarantine flag:</p><p><code>xattr -cr /path/to/Deck.app</code></p><p>Then open the app normally.</p>",
           "faq.q4": "How is this different from normal mastering?",
           "faq.a4": "Deck targets cassette transfer: tape formulation profiles, HF headroom, true-peak limiting, and optional tape-aware saturation — so your digital master survives recording to analog and playback on a deck or walkman.",
           "faq.q5": "Can I build a full mixtape from a folder?",
           "faq.a5": "Yes. Import a folder, arrange tracks in the editor, check whether everything fits your tape length, then prepare and export.",
+          "faq.q6": "How does Prepare work?",
+          "faq.a6": "<p><strong>Track analysis.</strong> Deck measures integrated LUFS, true peak, HF energy, roughness and sharpness, bass stereo correlation, clipping, and dynamic range.</p><p><strong>Auto strategy.</strong> Clean, deck-friendly material mostly gets level adjustment and true-peak limiting. Loud, bright, or aggressive tracks get full tape prep: HF tamer, de-esser, and sometimes soft saturation (depends on Type I / II / IV).</p><p><strong>Sibilants (s / sh / ch).</strong> If the top end is too harsh for tape, Prepare softens it with HF tamer (~4.5–14&nbsp;kHz) and a psychoacoustic de-esser on rough bands (~1.8–14&nbsp;kHz, up to ~4.5&nbsp;dB). This is not a vocal de-esser — the goal is to stop harsh highs from biting on cassette, not to remove all sibilance. Already-clean tracks skip this step.</p><p><strong>Typical processing chain:</strong></p><ul><li>Gain to match the tape profile (LUFS + peak ceiling for Type I / II / IV)</li><li>Infra HPF and LF stereo tightening so bass stays stable on tape</li><li>HF tamer + de-esser on bright material</li><li>Record-side HF pre-emphasis to compensate treble loss when recording to cassette</li><li>True-peak limiter and final loudness check</li></ul>",
           "footer.text": "Deck — prepare audio for cassette recording",
           "footer.source": "Source code"
         },
@@ -249,13 +254,15 @@
           "faq.q1": "Нужен ли DAW или плагин-хост?",
           "faq.a1": "Нет. Deck — это отдельное десктопное приложение. Импортируете аудио, подготавливаете и экспортируете WAV в одном окне.",
           "faq.q2": "Какие форматы можно импортировать?",
-          "faq.a2": "WAV, FLAC, AIFF и OGG. Экспорт — в WAV.",
-          "faq.q3": "MacOS пишет, что приложение от неизвестного разработчика",
-          "faq.a3": "Релизные сборки пока без notarization. Нажмите правой кнопкой на <strong>Deck.app</strong> → <strong>Open</strong>, затем подтвердите. Обычно это нужно сделать один раз.",
+          "faq.a2": "WAV, FLAC, AIFF, OGG и MP3. Экспорт — в WAV.",
+          "faq.q3": "MacOS не даёт открыть Deck после скачивания",
+          "faq.a3": "<p>Релизные сборки пока без notarization. Safari может писать <strong>повреждено</strong> или <strong>неизвестный разработчик</strong> — с приложением всё в порядке.</p><p><strong>Вариант 1:</strong> ПКМ на <strong>Deck.app</strong> → <strong>Открыть</strong> → подтвердить. Обычно достаточно один раз.</p><p><strong>Вариант 2:</strong> В Терминале снять карантин загрузки:</p><p><code>xattr -cr /путь/к/Deck.app</code></p><p>После этого открывайте как обычно.</p>",
           "faq.q4": "Чем это отличается от обычного мастеринга?",
           "faq.a4": "Deck ориентирован на кассетный перенос: профили типа ленты, HF headroom, true-peak лимитирование и опциональная tape-aware сатурация — чтобы мастер корректно звучал после записи на аналог.",
           "faq.q5": "Можно собрать целый микстейп из папки?",
           "faq.a5": "Да. Импортируйте папку, разложите треки в редакторе, проверьте длину под кассету, затем подготовьте и экспортируйте.",
+          "faq.q6": "Как работает Prepare?",
+          "faq.a6": "<p><strong>Анализ трека.</strong> Считаются integrated LUFS, true peak, ВЧ-энергия, резкость и roughness, стерео-корреляция в басу, клиппинг и динамический диапазон.</p><p><strong>Автовыбор стратегии.</strong> Уже «чистый» материал в основном получает подгонку уровня и true-peak лимитер. Громкий, яркий или агрессивный трек идёт в tape prep: HF tamer, de-esser, иногда мягкая сатурация (зависит от Type I / II / IV).</p><p><strong>Сибилянты («с», «ш», «ч»).</strong> Если верх слишком резкий для ленты, Prepare приглушает его: HF tamer (~4.5–14&nbsp;kHz) и точечный de-esser на жёстких полосах (~1.8–14&nbsp;kHz, до ~4.5&nbsp;dB). Это не вокальный de-esser — цель в том, чтобы «с/ш/ч» не резали на кассете, а не убрать их полностью. Уже чистые треки этот шаг пропускают.</p><p><strong>Типичная цепочка обработки:</strong></p><ul><li>Подгонка громкости под профиль ленты (LUFS + peak ceiling под Type I / II / IV)</li><li>HPF инфразвука и сужение стерео в НЧ, чтобы бас не «разваливался» на ленте</li><li>HF tamer + de-esser на ярком материале</li><li>Record-side HF pre-emphasis — компенсация потери верха при записи на кассету</li><li>True-peak limiter и финальная проверка loudness</li></ul>",
           "footer.text": "Deck — подготовка аудио для записи на кассету",
           "footer.source": "Исходники"
         }

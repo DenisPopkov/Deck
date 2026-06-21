@@ -160,6 +160,15 @@ if(APPLE)
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
         COMMENT "Bundling GstPEAQ script and optional STN model (macOS)"
     )
+
+    add_custom_command(
+        TARGET Deck
+        POST_BUILD
+        COMMAND /bin/bash "${CMAKE_SOURCE_DIR}/scripts/resign_mac_app.sh"
+                "$<TARGET_FILE_DIR:Deck>/../.."
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        COMMENT "Re-signing macOS app bundle after resource changes"
+    )
 endif()
 
 if(UNIX AND NOT APPLE)

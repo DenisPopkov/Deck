@@ -520,7 +520,33 @@ section {
 }
 
 .faq-item .faq-answer p {
-  margin: 0;
+  margin: 0 0 12px;
+}
+
+.faq-item .faq-answer p:last-child {
+  margin-bottom: 0;
+}
+
+.faq-item .faq-answer ul {
+  margin: 0 0 4px;
+  padding-left: 1.25rem;
+}
+
+.faq-item .faq-answer li {
+  margin-bottom: 6px;
+}
+
+.faq-item .faq-answer li:last-child {
+  margin-bottom: 0;
+}
+
+.faq-item .faq-answer code {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--surface-muted, #f3f3f3);
+  font-size: 0.88em;
 }
 
 /* Footer */

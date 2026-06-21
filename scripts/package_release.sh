@@ -29,6 +29,7 @@ rm -rf "$DIST/macOS/${APP_NAME}.app"
 cp -R "$APP_PATH" "$DIST/macOS/"
 
 bash "$ROOT/scripts/apply_app_icon.sh" "$APP_PATH"
+bash "$ROOT/scripts/resign_mac_app.sh" "$APP_PATH"
 
 ZIP="$DIST/Deck-${VERSION}-macOS.zip"
 rm -f "$ZIP"
