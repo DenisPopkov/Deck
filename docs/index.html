@@ -106,9 +106,9 @@
           <h2 data-i18n="download.title">Download Deck</h2>
           <p data-i18n="download.text">Choose your platform and install the app.</p>
           <div class="download-buttons">
-            <a class="btn btn-primary" href="assets/Deck-macOS.zip" download data-i18n="download.macos">MacOS</a>
-            <a class="btn btn-secondary" href="downloads/Deck-Windows-latest.zip" download data-i18n="download.windows">Windows</a>
-            <a class="btn btn-secondary" href="downloads/Deck-Linux-latest.tar.gz" download data-i18n="download.linux">Linux</a>
+            <a class="btn btn-primary" href="assets/Deck-macOS.zip" download data-platform="macos" data-i18n="download.macos">MacOS</a>
+            <a class="btn btn-secondary" href="downloads/Deck-Windows-latest.zip" download data-platform="windows" data-i18n="download.windows">Windows</a>
+            <a class="btn btn-secondary" href="downloads/Deck-Linux-latest.tar.gz" download data-platform="linux" data-i18n="download.linux">Linux</a>
           </div>
         </div>
       </div>
@@ -268,6 +268,25 @@
         }
       };
 
+      function detectDownloadPlatform() {
+        const ua = (navigator.userAgent || "").toLowerCase();
+        if (/windows|win32|win64|wow64/.test(ua)) return "windows";
+        if (/macintosh|mac os x/.test(ua) && !/iphone|ipad|ipod/.test(ua)) return "macos";
+        if (/linux|x11/.test(ua) && !/android/.test(ua)) return "linux";
+        return null;
+      }
+
+      function highlightDownloadPlatform() {
+        const platform = detectDownloadPlatform();
+        if (!platform) return;
+
+        document.querySelectorAll(".download-buttons [data-platform]").forEach((btn) => {
+          const match = btn.getAttribute("data-platform") === platform;
+          btn.classList.toggle("btn-primary", match);
+          btn.classList.toggle("btn-secondary", !match);
+        });
+      }
+
       function applyLanguage(lang) {
         const dict = i18n[lang] || i18n.en;
         document.documentElement.lang = lang;
@@ -292,6 +311,7 @@
 
       const currentLang = detectLanguage();
       applyLanguage(currentLang);
+      highlightDownloadPlatform();
     })();
   </script>
 
