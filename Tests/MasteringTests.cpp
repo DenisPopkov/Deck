@@ -17,10 +17,471 @@
 #include "../Source/analysis/SpectrumAnalyzer.h"
 #include "../Source/dsp/ml/TapeAwareSoftClipper.h"
 #include "../Source/io/AudioFileLoader.h"
+#include "../Source/io/DropPayload.h"
+#include "../Source/audio/PreviewEngine.h"
+#include "../Source/audio/PerceptualPlaybackProcessor.h"
+#include "../Source/io/AudioResampler.h"
+#include "../Source/dsp/dynamics/DynamicEQ.h"
+#include "../Source/dsp/dynamics/TransientShaper.h"
+#include "../Source/dsp/tape/WowFlutterEmulator.h"
+#include "../Source/dsp/tape/RubberBandWowProcessor.h"
+#include "../Source/dsp/CassetteAutoMaster.h"
+#include "../Source/analysis/PerceptualQualityGuard.h"
 #include "../Source/dsp/graph/AdaptiveMasteringProcessor.h"
+#include "../Source/export/WavExporter.h"
+#include "../Source/project/SideRenderer.h"
+#include "../Source/dsp/AudioConstants.h"
 
 using namespace cassette;
 using namespace cassette::test;
+
+namespace
+{
+
+juce::File fixtureAlbumFromEnv()
+{
+    if (const char* path = std::getenv("CASSETTE_FIXTURE_ALBUM"))
+        return juce::File(juce::String::fromUTF8(path));
+    return {};
+}
+
+struct AlbumFixtureContext
+{
+    juce::File folder;
+    FolderScanResult scan;
+    TapeLengthSpec tape;
+    FolderFitReport fit;
+    MixtapeEditController editor;
+    MixtapeEditController::LayoutSnapshot layout;
+    bool ready = false;
+};
+
+bool loadAlbumFixture(AlbumFixtureContext& fx)
+{
+    fx.ready = false;
+    fx.folder = fixtureAlbumFromEnv();
+    if (!fx.folder.isDirectory())
+        return false;
+
+    fx.scan = FolderMixBuilder::scanFolder(fx.folder);
+    if (!fx.scan.success)
+        return false;
+
+    fx.tape = tapeLengthSpecForPreset(TapeLengthPreset::C90, 45.0);
+    fx.fit = FolderMixBuilder::analyzeFit(fx.scan, fx.tape);
+    fx.editor.loadFromScan(fx.scan, fx.fit);
+    fx.editor.syncCassettePlan(fx.tape);
+    fx.layout = fx.editor.layoutForCassette(0);
+    fx.ready = true;
+    return true;
+}
+
+static bool isFullAlbumFixture(const AlbumFixtureContext& fx)
+{
+    return fx.scan.tracks.size() >= 10 && fx.scan.totalDurationSec > 45.0 * 60.0;
+}
+
+static void runFixtureAlbumDropAndImportTests(TestContext& ctx, const AlbumFixtureContext& fx)
+{
+    if (!fx.ready)
+        return;
+
+    juce::StringArray folderDrop;
+    folderDrop.add(fx.folder.getFullPathName());
+    ctx.expectTrue(classifyDropPayload(folderDrop) == DropPayloadKind::Folder,
+                   "folder drag payload should classify as folder");
+    ctx.expectTrue(isDropPayloadInterested(folderDrop), "folder drag should be accepted");
+
+    juce::StringArray fileDrop;
+    fileDrop.add(fx.scan.tracks.front().file.getFullPathName());
+    ctx.expectTrue(classifyDropPayload(fileDrop) == DropPayloadKind::AudioFile,
+                   "audio file drag payload should classify as audio");
+    ctx.expectTrue(isDropPayloadInterested(fileDrop), "audio file drag should be accepted");
+
+    juce::StringArray fileUrlDrop;
+    fileUrlDrop.add("file://" + fx.scan.tracks.front().file.getFullPathName());
+    const auto normalised = AudioFileLoader::normaliseDroppedPath(fileUrlDrop[0]);
+    ctx.expectTrue(normalised.existsAsFile(), "file:// drop path should normalise to a file");
+    ctx.expectTrue(AudioFileLoader::pickFirstAudioFile(fileUrlDrop) == normalised,
+                   "pickFirstAudioFile should resolve file:// drops");
+
+    juce::StringArray junkDrop;
+    junkDrop.add(fx.folder.getChildFile("not-a-track.txt").getFullPathName());
+    ctx.expectTrue(classifyDropPayload(junkDrop) == DropPayloadKind::None,
+                   "unsupported file drag should be ignored");
+    ctx.expectTrue(!isDropPayloadInterested(junkDrop), "unsupported drag should not be accepted");
+}
+
+static void runFixtureAlbumPreviewTests(TestContext& ctx, const AlbumFixtureContext& fx)
+{
+    if (!fx.ready)
+        return;
+
+    const auto loaded = AudioFileLoader::loadToBuffer(fx.scan.tracks.front().file);
+    ctx.expectTrue(loaded.hasValue(), "preview fixture track should load into buffer");
+
+    PreviewEngine engine;
+    engine.setBuffer(loaded->buffer, loaded->sampleRate);
+    engine.prepareToPlay(512, 48000.0);
+    ctx.expectTrue(peakAbs(loaded->buffer) > 0.001f, "fixture track should contain audible audio");
+
+    engine.setPlayheadSec(engine.getDurationSec() * 0.25);
+    engine.setPlaying(true);
+
+    juce::AudioBuffer<float> block(2, 512);
+    float peak = 0.0f;
+    for (int i = 0; i < 24; ++i)
+    {
+        juce::AudioSourceChannelInfo info(block);
+        engine.getNextAudioBlock(info);
+        peak = juce::jmax(peak, peakAbs(block));
+    }
+
+    ctx.expectTrue(bufferIsFinite(block), "preview engine output must stay finite");
+    ctx.expectTrue(peak > 0.001f, "preview engine should output audible audio while playing");
+    ctx.expectTrue(engine.getPlayheadSec() > 0.05, "preview playhead should advance during playback");
+
+    const double seekTarget = engine.getDurationSec() * 0.5;
+    engine.setPlaying(false);
+    engine.setPlayheadSec(seekTarget);
+    ctx.expectNear(static_cast<float>(engine.getPlayheadSec()),
+                   static_cast<float>(seekTarget),
+                   0.15f,
+                   "preview seek should land near requested position");
+}
+
+static void runFixtureAlbumSingleTrackSmoke(TestContext& ctx, const AlbumFixtureContext& fx)
+{
+    if (!fx.ready)
+        return;
+
+    ctx.expectTrue(fx.editor.canPrepare(fx.tape), "mixtape editor should be prepare-ready");
+
+    const auto& firstTrack = fx.scan.tracks.front().file;
+    const auto loaded = AudioFileLoader::loadToBufferWithDiagnostics(firstTrack);
+    ctx.expectTrue(loaded.audio.hasValue(),
+                   ("album track should load: " + loaded.error).toRawUTF8());
+    if (!loaded.audio.hasValue())
+        return;
+
+    auto buffer = loaded.audio->buffer;
+    const double sr = loaded.audio->sampleRate;
+    ctx.expectTrue(buffer.getNumChannels() >= 1, "loaded track should have channels");
+    ctx.expectTrue(sr >= 44100.0, "fixture track should load at CD quality or higher");
+    ctx.expectTrue(bufferIsFinite(buffer), "loaded album audio must be finite");
+
+    const auto before = analyze(buffer, sr);
+    const auto profile = CassetteProfile::fromFormulation(TapeFormulation::TypeIV);
+    MasteringOptions opts;
+    opts.skipQualityCompare = true;
+
+    AdaptiveMasteringProcessor processor;
+    const auto mastered = processor.process(buffer, profile, opts, sr);
+    const auto after = analyze(buffer, sr);
+
+    ctx.expectTrue(mastered.iterations >= 1, "album track mastering should run");
+    ctx.expectTrue(bufferIsFinite(buffer), "mastered album track must stay finite");
+    ctx.expectTrue(peakAbs(buffer) > 0.01f, "mastered album track should remain audible");
+    ctx.expectTrue(after.truePeakDbfs <= profile.truePeakCeilingDbfs + 0.35f,
+                   "mastered album track should respect true-peak ceiling");
+    ctx.expectTrue(std::abs(after.integratedLUFS - before.integratedLUFS) < 8.0f,
+                   "mastering should not wildly change loudness");
+
+    const auto exportFile = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                                .getChildFile("deck_audit_mastered.wav");
+    exportFile.deleteFile();
+    ctx.expectTrue(WavExporter::writeWav32Float(exportFile, buffer, sr),
+                   "mastered album track should export to WAV");
+    ctx.expectTrue(exportFile.existsAsFile() && exportFile.getSize() > 10000,
+                   "exported WAV should be non-trivial size");
+    exportFile.deleteFile();
+}
+
+static void runFixtureAlbumSingleClipRenderTests(TestContext& ctx, const AlbumFixtureContext& fx)
+{
+    if (!fx.ready)
+        return;
+
+    std::vector<FolderTrackInfo> singleSideA = { fx.layout.sideA.front() };
+    const std::vector<FolderTrackInfo> emptySideB;
+    const auto profile = CassetteProfile::fromFormulation(TapeFormulation::TypeIV);
+    MasteringOptions opts;
+    opts.skipQualityCompare = true;
+
+    auto project = FolderMixBuilder::buildProjectFromSides(singleSideA,
+                                                           emptySideB,
+                                                           fx.folder,
+                                                           fx.editor.gapBetweenTracksSec(),
+                                                           "single-clip",
+                                                           profile,
+                                                           opts,
+                                                           fx.tape.minutesPerSide * 60.0);
+
+    ctx.expectTrue(project.sideA.clips.size() == 1, "single-clip project should contain one clip");
+    ctx.expectTrue(project.sideB.clips.empty(), "single-clip project should not use side B");
+
+    const double sr = kProjectSampleRate;
+    auto rendered = SideRenderer::renderSide(project, false, sr, false, {}, true);
+    ctx.expectTrue(rendered.success, ("single-clip render: " + rendered.error).toRawUTF8());
+    if (!rendered.success)
+        return;
+
+    ctx.expectTrue(bufferIsFinite(rendered.buffer), "single-clip mastered render must be finite");
+    ctx.expectTrue(peakAbs(rendered.buffer) > 0.01f, "single-clip render should be audible");
+    ctx.expectTrue(rendered.referenceBuffer.getNumSamples() > 0, "single-clip render should capture reference");
+    ctx.expectTrue(bufferIsFinite(rendered.referenceBuffer), "single-clip reference must be finite");
+    ctx.expectTrue(peakAbs(rendered.referenceBuffer) > 0.01f, "single-clip reference should be audible");
+    ctx.expectTrue(rendered.buffer.getNumSamples() == rendered.referenceBuffer.getNumSamples(),
+                   "reference timeline should match mastered timeline length");
+    ctx.expectTrue(rendered.buffer.getNumSamples() < static_cast<int>(sr * fx.layout.sideA.front().durationSec * 1.05),
+                   "trimmed render should not pad to full tape length");
+
+    auto padded = SideRenderer::renderSide(project, false, sr, true, {}, false);
+    ctx.expectTrue(padded.success, ("single-clip padded render: " + padded.error).toRawUTF8());
+    if (padded.success)
+    {
+        const int expectedPad = static_cast<int>(fx.tape.minutesPerSide * 60.0 * sr);
+        ctx.expectTrue(std::abs(padded.buffer.getNumSamples() - expectedPad) <= static_cast<int>(sr * 2.0),
+                       "padded single-clip render should fill the tape side length");
+    }
+}
+
+static void runFixtureAlbumFullPrepareTests(TestContext& ctx, const AlbumFixtureContext& fx)
+{
+    if (!fx.ready)
+        return;
+
+    if (std::getenv("CASSETTE_SKIP_FULL_PREPARE"))
+    {
+        std::cout << "SKIP: full album prepare (CASSETTE_SKIP_FULL_PREPARE is set)\n";
+        return;
+    }
+
+    if (!isFullAlbumFixture(fx))
+    {
+        std::cout << "Running mini-album full prepare (" << fx.scan.tracks.size() << " tracks)\n";
+    }
+    else
+    {
+        std::cout << "Full album prepare: rendering Side A and Side B for "
+                  << fx.scan.tracks.size() << " tracks...\n";
+    }
+
+    const juce::String projectName = isFullAlbumFixture(fx) ? "evermore" : "mini-album";
+
+    const auto profile = CassetteProfile::fromFormulation(TapeFormulation::TypeIV);
+    MasteringOptions opts;
+    opts.skipQualityCompare = true;
+
+    auto project = FolderMixBuilder::buildProjectFromSides(fx.layout.sideA,
+                                                           fx.layout.sideB,
+                                                           fx.folder,
+                                                           fx.editor.gapBetweenTracksSec(),
+                                                           projectName,
+                                                           profile,
+                                                           opts,
+                                                           fx.tape.minutesPerSide * 60.0);
+
+    ctx.expectTrue(!project.sideA.clips.empty(), "full prepare project should have side A clips");
+    ctx.expectTrue(project.sideA.clips.size() + project.sideB.clips.size() == fx.scan.tracks.size(),
+                   "full prepare should assign every scanned track");
+    if (fx.fit.split.needsSideB)
+        ctx.expectTrue(!project.sideB.clips.empty(), "split fixture should have side B clips");
+
+    const double sr = kProjectSampleRate;
+    const double gapSec = fx.editor.gapBetweenTracksSec();
+    const int expectedSideASamples = static_cast<int>(FolderMixBuilder::sideDurationSec(fx.layout.sideA, gapSec) * sr);
+    const int expectedSideBSamples = static_cast<int>(FolderMixBuilder::sideDurationSec(fx.layout.sideB, gapSec) * sr);
+
+    int sideAClipsRendered = 0;
+    const auto sideAProgress = [&](int done, int total, const juce::String& title) {
+        sideAClipsRendered = done;
+        std::cout << "  Side A " << done << "/" << total << ": " << title << "\n";
+    };
+
+    auto renderedA = SideRenderer::renderSide(project, false, sr, false, sideAProgress, false);
+    ctx.expectTrue(renderedA.success, ("Side A full prepare: " + renderedA.error).toRawUTF8());
+    if (!renderedA.success)
+        return;
+
+    ctx.expectTrue(sideAClipsRendered == static_cast<int>(project.sideA.clips.size()),
+                   "Side A should render every clip");
+    ctx.expectTrue(bufferIsFinite(renderedA.buffer), "Side A output must be finite");
+    ctx.expectTrue(peakAbs(renderedA.buffer) > 0.01f, "Side A output should be audible");
+    ctx.expectTrue(std::abs(renderedA.buffer.getNumSamples() - expectedSideASamples)
+                       <= static_cast<int>(sr * 2.0),
+                   "Side A duration should match planned side length");
+
+    RenderResult renderedB;
+    int sideBClipsRendered = 0;
+    if (!project.sideB.clips.empty())
+    {
+        const auto sideBProgress = [&](int done, int total, const juce::String& title) {
+            sideBClipsRendered = done;
+            std::cout << "  Side B " << done << "/" << total << ": " << title << "\n";
+        };
+
+        renderedB = SideRenderer::renderSide(project, true, sr, false, sideBProgress, false);
+        ctx.expectTrue(renderedB.success, ("Side B full prepare: " + renderedB.error).toRawUTF8());
+        if (!renderedB.success)
+            return;
+
+        ctx.expectTrue(sideBClipsRendered == static_cast<int>(project.sideB.clips.size()),
+                       "Side B should render every clip");
+        ctx.expectTrue(bufferIsFinite(renderedB.buffer), "Side B output must be finite");
+        ctx.expectTrue(peakAbs(renderedB.buffer) > 0.01f, "Side B output should be audible");
+        ctx.expectTrue(std::abs(renderedB.buffer.getNumSamples() - expectedSideBSamples)
+                           <= static_cast<int>(sr * 2.0),
+                       "Side B duration should match planned side length");
+    }
+    else
+    {
+        std::cout << "SKIP: side B full prepare (single-side fixture)\n";
+    }
+
+    const auto tempDir = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                             .getChildFile("deck_audit_prepare");
+    tempDir.createDirectory();
+    const auto sideAFile = tempDir.getChildFile(projectName + " Side A.wav");
+    const auto sideBFile = tempDir.getChildFile(projectName + " Side B.wav");
+    sideAFile.deleteFile();
+    sideBFile.deleteFile();
+
+    ctx.expectTrue(WavExporter::writeWav32Float(sideAFile, renderedA.buffer, sr),
+                   "Side A full prepare should export to WAV");
+    const int minSideABytes = isFullAlbumFixture(fx) ? 100000 : 1000;
+    ctx.expectTrue(sideAFile.existsAsFile() && sideAFile.getSize() > minSideABytes,
+                   "Side A WAV should be non-trivial");
+
+    if (!project.sideB.clips.empty())
+    {
+        ctx.expectTrue(WavExporter::writeWav32Float(sideBFile, renderedB.buffer, sr),
+                       "Side B full prepare should export to WAV");
+        ctx.expectTrue(sideBFile.existsAsFile() && sideBFile.getSize() > minSideABytes,
+                       "Side B WAV should be non-trivial");
+        sideBFile.deleteFile();
+    }
+
+    sideAFile.deleteFile();
+}
+
+static void runFixtureAlbumEditorTests(TestContext& ctx, AlbumFixtureContext& fx)
+{
+    if (!fx.ready || fx.layout.sideA.size() < 2)
+        return;
+
+    const auto first = fx.layout.sideA.front().displayName;
+    const auto second = fx.layout.sideA[1].displayName;
+
+    ctx.expectTrue(fx.editor.reorderWithinSide(0, 0, 1), "album editor should reorder within side A");
+    ctx.expectTrue(fx.editor.sideA().front().displayName == second,
+                   "reorder should move second track to the top of side A");
+
+    fx.editor.getUndoManager().undo();
+    ctx.expectTrue(fx.editor.sideA().front().displayName == first,
+                   "undo should restore original side A order");
+
+    const int sideBBefore = static_cast<int>(fx.editor.sideB().size());
+    ctx.expectTrue(fx.editor.moveToSide(0, 0, 1, sideBBefore),
+                   "album editor should move a track from side A to side B");
+    ctx.expectTrue(fx.editor.sideB().size() == static_cast<size_t>(sideBBefore + 1),
+                   "side B should gain one track after cross-side move");
+
+    const auto preview = fx.editor.buildPreviewProject(fx.tape.minutesPerSide * 60.0);
+    ctx.expectTrue(preview.sideA.clips.size() + preview.sideB.clips.size() == fx.scan.tracks.size(),
+                   "preview project should still cover every track after edits");
+    ctx.expectTrue(fx.editor.hasManualEdits(), "cross-side move should mark manual edits");
+}
+
+static void runFixtureAlbumNaturalSortAndRebalanceTests(TestContext& ctx)
+{
+    const auto folder = fixtureAlbumFromEnv();
+    if (!folder.isDirectory())
+        return;
+
+    const auto scan = FolderMixBuilder::scanFolder(folder);
+    ctx.expectTrue(scan.success, "album folder should scan successfully");
+    if (!scan.success)
+        return;
+
+    for (size_t i = 1; i < scan.tracks.size(); ++i)
+    {
+        ctx.expectTrue(scan.tracks[i - 1].file.getFileName().compareNatural(scan.tracks[i].file.getFileName()) <= 0,
+                       "folder scan should return tracks in natural filename order");
+    }
+
+    AlbumFixtureContext fx;
+    if (!loadAlbumFixture(fx))
+        return;
+
+    while (!fx.editor.sideB().empty())
+        ctx.expectTrue(fx.editor.moveToSide(1, 0, 0, static_cast<int>(fx.editor.sideA().size())),
+                       "album rebalance setup should stack side B onto side A");
+
+    if (!fx.editor.hasSideOverflow(fx.tape))
+    {
+        std::cout << "SKIP: album rebalance (fixture fits on one side)\n";
+        return;
+    }
+
+    ctx.expectTrue(fx.editor.hasSideOverflow(fx.tape),
+                   "stacked album should overflow one C90 side before rebalance");
+    fx.editor.rebalance(fx.tape);
+    ctx.expectTrue(!fx.editor.hasSideOverflow(fx.tape), "album rebalance should fit both sides on C90");
+    ctx.expectTrue(fx.editor.canPrepare(fx.tape), "rebalanced album should be prepare-ready");
+    ctx.expectTrue(fx.editor.mergedFullScan().tracks.size() == fx.scan.tracks.size(),
+                   "album rebalance should keep all scanned tracks");
+}
+
+static void runFixtureAlbumIntegrationTests(TestContext& ctx)
+{
+    const auto folder = fixtureAlbumFromEnv();
+    if (!folder.isDirectory())
+    {
+        std::cout << "SKIP: album integration (set CASSETTE_FIXTURE_ALBUM)\n";
+        return;
+    }
+
+    std::cout << "Album fixture: " << folder.getFullPathName() << "\n";
+
+    AlbumFixtureContext fx;
+    ctx.expectTrue(loadAlbumFixture(fx), "album fixture should scan and build editor layout");
+    if (!fx.ready)
+        return;
+
+    ctx.expectTrue(fx.scan.tracks.size() >= 2, "fixture should have at least 2 tracks");
+    if (isFullAlbumFixture(fx))
+    {
+        std::cout << "Full album fixture detected (" << fx.scan.tracks.size() << " tracks)\n";
+        ctx.expectTrue(fx.scan.tracks.size() >= 10, "full album fixture should have at least 10 tracks");
+        ctx.expectTrue(fx.scan.totalDurationSec > 45.0 * 60.0, "full album should be longer than one tape side");
+        ctx.expectTrue(fx.fit.fitsOnCassette, "full-length album should fit on one C90");
+        ctx.expectTrue(fx.fit.split.needsSideB, "full-length album should use both sides on C90");
+    }
+    else
+    {
+        std::cout << "Mini album fixture smoke (" << fx.scan.tracks.size() << " tracks)\n";
+        ctx.expectTrue(fx.fit.fits, "mini fixture tracks should be buildable");
+        ctx.expectTrue(fx.fit.fitsOnCassette || fx.fit.fitsOneSide, "mini fixture should fit on cassette");
+    }
+
+    for (const auto& track : fx.scan.tracks)
+    {
+        ctx.expectTrue(AudioFileLoader::isSupportedAudioFile(track.file),
+                       "scanned track should be a supported audio file");
+        ctx.expectTrue(track.durationSec > 0.2, "scanned track should have positive duration");
+    }
+
+    runFixtureAlbumDropAndImportTests(ctx, fx);
+    runFixtureAlbumPreviewTests(ctx, fx);
+    runFixtureAlbumSingleTrackSmoke(ctx, fx);
+    runFixtureAlbumSingleClipRenderTests(ctx, fx);
+    runFixtureAlbumFullPrepareTests(ctx, fx);
+    runFixtureAlbumEditorTests(ctx, fx);
+    runFixtureAlbumNaturalSortAndRebalanceTests(ctx);
+}
+
+}
 
 static void testHotMasterTrimmedToProfileCap(TestContext& ctx)
 {
@@ -880,6 +1341,504 @@ static void testOnnxStnRunnerMatchesGrid(TestContext& ctx)
 }
 #endif
 
+static void testAudioResamplerChangesSampleCount(TestContext& ctx)
+{
+    constexpr double srcRate = 44100.0;
+    constexpr double dstRate = 48000.0;
+    auto buffer = makeSineBuffer(srcRate, 1.0, 440.0f, 0.5f);
+    const int srcSamples = buffer.getNumSamples();
+
+    resampleBufferLinear(buffer, srcRate, dstRate);
+
+    const int expected = static_cast<int>(std::llround(srcSamples * dstRate / srcRate));
+    ctx.expectTrue(std::abs(buffer.getNumSamples() - expected) <= 2,
+                   "linear resampler should scale sample count by rate ratio");
+    ctx.expectTrue(bufferIsFinite(buffer), "resampled buffer must stay finite");
+    ctx.expectTrue(peakAbs(buffer) > 0.1f, "resampled sine should remain audible");
+}
+
+static void testPerceptualPlaybackProcessorStable(TestContext& ctx)
+{
+    constexpr double sr = 48000.0;
+    auto buffer = makeSineBuffer(sr, 0.5, 120.0f, 0.35f, 2);
+    const auto dryPeak = peakAbs(buffer);
+
+    PerceptualPlaybackProcessor playback;
+    playback.prepare(sr, buffer.getNumSamples());
+    PerceptualPlaybackSettings settings;
+    settings.virtualSubEnabled = true;
+    settings.crossfeedEnabled = true;
+    settings.stereoWidenEnabled = true;
+    playback.setSettings(settings);
+    playback.process(buffer);
+
+    ctx.expectTrue(bufferIsFinite(buffer), "perceptual playback output must stay finite");
+    ctx.expectTrue(peakAbs(buffer) > dryPeak * 0.2f, "perceptual playback should not silence material");
+}
+
+static void testPreviewEngineMonitoringPath(TestContext& ctx)
+{
+    constexpr double sr = 48000.0;
+    auto source = makeSineBuffer(sr, 0.4, 180.0f, 0.4f, 2);
+
+    PreviewEngine engine;
+    engine.setBuffer(source, sr);
+    engine.setMonitoringEnabled(true);
+    engine.prepareToPlay(512, sr);
+    engine.setPlayheadSec(0.0);
+    engine.setPlaying(true);
+
+    juce::AudioBuffer<float> block(2, 512);
+    for (int i = 0; i < 16; ++i)
+    {
+        juce::AudioSourceChannelInfo info(block);
+        engine.getNextAudioBlock(info);
+    }
+
+    ctx.expectTrue(bufferIsFinite(block), "preview monitoring path must stay finite");
+    ctx.expectTrue(peakAbs(block) > 0.01f, "preview monitoring path should output audio");
+}
+
+static void testDynamicEQAttenuatesHotSignal(TestContext& ctx)
+{
+    constexpr double sr = 48000.0;
+    auto buffer = makeSineBuffer(sr, 0.5, 1000.0f, 0.95f);
+    const auto before = peakAbs(buffer);
+
+    DynamicEQ eq(200.0f, 8000.0f, -30.0f, 4.0f);
+    eq.prepare(sr, buffer.getNumSamples());
+    eq.process(buffer);
+
+    ctx.expectTrue(peakAbs(buffer) < before, "dynamic EQ should attenuate hot material");
+    ctx.expectTrue(bufferIsFinite(buffer), "dynamic EQ output must stay finite");
+}
+
+static void testTransientShaperBoostsAttack(TestContext& ctx)
+{
+    constexpr double sr = 48000.0;
+    juce::AudioBuffer<float> buffer(1, static_cast<int>(sr * 0.05));
+    buffer.clear();
+    buffer.setSample(0, 200, 1.0f);
+    const auto before = peakAbs(buffer);
+
+    TransientShaper shaper;
+    shaper.setAttackDb(8.0f);
+    shaper.setSustainDb(0.0f);
+    shaper.prepare(sr);
+    shaper.process(buffer);
+
+    ctx.expectTrue(peakAbs(buffer) >= before, "transient shaper should boost attack transients");
+    ctx.expectTrue(bufferIsFinite(buffer), "transient shaper output must stay finite");
+}
+
+static void testWowFlutterEmulatorStable(TestContext& ctx)
+{
+    constexpr double sr = 48000.0;
+    auto buffer = makeSineBuffer(sr, 1.5, 440.0f, 0.45f, 2);
+
+    WowFlutterEmulator wow;
+    wow.prepare(sr, buffer.getNumSamples(), buffer.getNumChannels());
+    wow.setProfile(CassetteProfile::fromFormulation(TapeFormulation::TypeIV));
+    wow.process(buffer);
+
+    ctx.expectTrue(bufferIsFinite(buffer), "wow/flutter output must stay finite");
+    ctx.expectTrue(peakAbs(buffer) > 0.05f, "wow/flutter should keep material audible");
+}
+
+static void testTapeLengthPresets(TestContext& ctx)
+{
+    const auto c60 = tapeLengthSpecForPreset(TapeLengthPreset::C60, 45.0);
+    const auto c90 = tapeLengthSpecForPreset(TapeLengthPreset::C90, 45.0);
+    const auto c120 = tapeLengthSpecForPreset(TapeLengthPreset::C120, 45.0);
+    const auto custom = tapeLengthSpecForPreset(TapeLengthPreset::Custom, 52.5);
+
+    ctx.expectNear(static_cast<float>(c60.minutesPerSide), 30.0f, 0.01f, "C60 should be 30 min per side");
+    ctx.expectNear(static_cast<float>(c90.minutesPerSide), 45.0f, 0.01f, "C90 should be 45 min per side");
+    ctx.expectNear(static_cast<float>(c120.minutesPerSide), 60.0f, 0.01f, "C120 should be 60 min per side");
+    ctx.expectNear(static_cast<float>(custom.minutesPerSide), 52.5f, 0.01f, "custom preset should preserve minutes");
+    ctx.expectTrue(custom.label.contains("52"), "custom preset label should mention minutes");
+}
+
+static void testFolderMixFormatDuration(TestContext& ctx)
+{
+    ctx.expectTrue(FolderMixBuilder::formatDuration(90.0) == "1:30",
+                   "formatDuration should render mm:ss");
+    ctx.expectTrue(FolderMixBuilder::formatDuration(45.0 * 60.0 + 7.0) == "45:07",
+                   "formatDuration should zero-pad seconds");
+}
+
+static void testDropPayloadFolderWinsOverAudioFile(TestContext& ctx)
+{
+    const auto dir = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                         .getChildFile("deck_drop_payload_test");
+    dir.createDirectory();
+
+    juce::StringArray mixed;
+    mixed.add(dir.getFullPathName());
+    mixed.add(dir.getChildFile("01.flac").getFullPathName());
+    ctx.expectTrue(classifyDropPayload(mixed) == DropPayloadKind::Folder,
+                   "folder path in mixed drag payload should classify as folder");
+
+    dir.deleteRecursively();
+}
+
+static void testKenwoodPreflightUsesAlternateToneStack(TestContext& ctx)
+{
+    constexpr double sr = 48000.0;
+    juce::AudioBuffer<float> standard(2, static_cast<int>(sr));
+    juce::AudioBuffer<float> kenwood(2, static_cast<int>(sr));
+    standard.clear();
+    kenwood.clear();
+
+    PreflightOptions stdOpts;
+    stdOpts.title = "Test";
+    PreflightTones::prependToBuffer(standard, sr, stdOpts);
+
+    PreflightOptions kenOpts;
+    kenOpts.title = "Test";
+    kenOpts.kenwoodKX1100Calibration = true;
+    PreflightTones::prependToBuffer(kenwood, sr, kenOpts);
+
+    ctx.expectTrue(kenwood.getNumSamples() != standard.getNumSamples(),
+                   "Kenwood preflight should use a different tone stack than the standard block");
+    ctx.expectTrue(kenwood.getNumSamples() > static_cast<int>(sr * 50),
+                   "Kenwood preflight block should still exceed 50 seconds");
+    ctx.expectTrue(standard.getNumSamples() > static_cast<int>(sr * 50),
+                   "standard preflight block should exceed 50 seconds");
+}
+
+static void testMixtapeEditorReorderUndoAndCrossSideMove(TestContext& ctx)
+{
+    FolderScanResult scan;
+    scan.success = true;
+    scan.gapBetweenTracksSec = 2.0;
+
+    for (int i = 0; i < 4; ++i)
+    {
+        FolderTrackInfo t;
+        t.displayName = "Track " + juce::String(i + 1);
+        t.durationSec = 8.0 * 60.0;
+        scan.tracks.push_back(t);
+    }
+
+    scan.totalDurationSec = 4.0 * 8.0 * 60.0 + 3.0 * scan.gapBetweenTracksSec;
+    const auto tape = tapeLengthSpecForPreset(TapeLengthPreset::C90, 45.0);
+    const auto fit = FolderMixBuilder::analyzeFit(scan, tape);
+
+    MixtapeEditController editor;
+    editor.loadFromScan(scan, fit);
+    const auto originalFirst = editor.sideA().front().displayName;
+
+    ctx.expectTrue(editor.reorderWithinSide(0, 0, 1), "editor should reorder within side A");
+    ctx.expectTrue(editor.sideA().front().displayName != originalFirst,
+                   "reorder should change the first row");
+
+    editor.getUndoManager().undo();
+    ctx.expectTrue(editor.sideA().front().displayName == originalFirst,
+                   "undo should restore the original first row");
+
+    const int sideBCount = static_cast<int>(editor.sideB().size());
+    ctx.expectTrue(editor.moveToSide(0, 0, 1, sideBCount), "editor should move a track to side B");
+    ctx.expectTrue(editor.sideB().size() == static_cast<size_t>(sideBCount + 1),
+                   "side B should grow after cross-side move");
+    ctx.expectTrue(editor.hasManualEdits(), "manual edits flag should be set after move");
+}
+
+static void testMixtapeEditorRebalanceClearsOverflow(TestContext& ctx)
+{
+    FolderScanResult scan;
+    scan.success = true;
+    scan.gapBetweenTracksSec = 2.0;
+
+    for (int i = 0; i < 4; ++i)
+    {
+        FolderTrackInfo t;
+        t.displayName = "Track " + juce::String(i + 1);
+        t.durationSec = 8.0 * 60.0;
+        scan.tracks.push_back(t);
+    }
+
+    scan.totalDurationSec = 4.0 * 8.0 * 60.0 + 3.0 * scan.gapBetweenTracksSec;
+    const auto tape = tapeLengthSpecForPreset(TapeLengthPreset::C60, 30.0);
+    const auto fit = FolderMixBuilder::analyzeFit(scan, tape);
+
+    MixtapeEditController editor;
+    editor.loadFromScan(scan, fit);
+
+    while (!editor.sideB().empty())
+        ctx.expectTrue(editor.moveToSide(1, 0, 0, static_cast<int>(editor.sideA().size())),
+                       "editor should move side B tracks onto side A");
+
+    ctx.expectTrue(editor.hasSideOverflow(tape), "stacking all tracks on side A should overflow C60");
+    editor.rebalance(tape);
+    ctx.expectTrue(!editor.hasSideOverflow(tape), "rebalance should clear side overflow");
+    ctx.expectTrue(editor.canPrepare(tape), "rebalanced layout should be prepare-ready");
+    ctx.expectTrue(!editor.hasManualEdits(), "rebalance should clear manual edits");
+    ctx.expectTrue(editor.sideA().size() + editor.sideB().size() == 4,
+                   "rebalance should keep every track");
+}
+
+static void testMixtapeEditorMoveRowAndBatchDelete(TestContext& ctx)
+{
+    FolderScanResult scan;
+    scan.success = true;
+    scan.gapBetweenTracksSec = 2.0;
+
+    for (int i = 0; i < 5; ++i)
+    {
+        FolderTrackInfo t;
+        t.displayName = "Track " + juce::String(i + 1);
+        t.durationSec = 6.0 * 60.0;
+        scan.tracks.push_back(t);
+    }
+
+    scan.totalDurationSec = 5.0 * 6.0 * 60.0 + 4.0 * scan.gapBetweenTracksSec;
+    const auto tape = tapeLengthSpecForPreset(TapeLengthPreset::C90, 45.0);
+    const auto fit = FolderMixBuilder::analyzeFit(scan, tape);
+
+    MixtapeEditController editor;
+    editor.loadFromScan(scan, fit);
+    ctx.expectTrue(editor.sideA().size() > 1, "fixture should start with multiple side A rows");
+
+    const auto originalFirst = editor.sideA().front().displayName;
+    const auto originalSecond = editor.sideA()[1].displayName;
+
+    ctx.expectTrue(editor.moveRowDown(0, 0), "moveRowDown should move first row down");
+    ctx.expectTrue(editor.sideA()[0].displayName == originalSecond,
+                   "first row should receive the former second track");
+    ctx.expectTrue(editor.sideA()[1].displayName == originalFirst,
+                   "second row should receive the former first track");
+    ctx.expectTrue(editor.moveRowUp(0, 1), "moveRowUp should restore row order");
+
+    const auto beforeDelete = editor.mergedFullScan().tracks.size();
+    ctx.expectTrue(editor.deleteTracks({ { 0, 0 }, { 0, 1 } }), "batch delete should remove two tracks");
+    ctx.expectTrue(editor.mergedFullScan().tracks.size() == beforeDelete - 2,
+                   "batch delete should reduce merged track count");
+    ctx.expectTrue(editor.computeFit(tape).requiredSec < fit.requiredSec,
+                   "batch delete should reduce required duration");
+}
+
+static void testMixtapeEditorMultiCassetteLayouts(TestContext& ctx)
+{
+    FolderScanResult scan;
+    scan.success = true;
+    scan.gapBetweenTracksSec = 2.0;
+
+    for (int i = 0; i < 7; ++i)
+    {
+        FolderTrackInfo t;
+        t.displayName = "Track " + juce::String(i + 1);
+        t.durationSec = 20.0 * 60.0;
+        scan.tracks.push_back(t);
+    }
+
+    scan.totalDurationSec = 7.0 * 20.0 * 60.0 + 6.0 * scan.gapBetweenTracksSec;
+    const auto tape = tapeLengthSpecForPreset(TapeLengthPreset::C120, 60.0);
+    const auto fit = FolderMixBuilder::analyzeFit(scan, tape);
+
+    MixtapeEditController editor;
+    editor.loadFromScan(scan, fit);
+    ctx.expectTrue(editor.getCassetteCount() == 2, "long album should load as two cassettes");
+
+    const auto layout0 = editor.layoutForCassette(0);
+    const auto layout1 = editor.layoutForCassette(1);
+    const size_t totalTracks = layout0.sideA.size() + layout0.sideB.size() + layout1.sideA.size()
+                               + layout1.sideB.size();
+    ctx.expectTrue(totalTracks == 7, "cassette layouts should cover every track");
+    ctx.expectTrue(!layout0.sideA.empty(), "first cassette should have side A tracks");
+    ctx.expectTrue(!layout1.sideA.empty(), "second cassette should have side A tracks");
+
+    const auto project = editor.buildProjectForCassette(1, "tape-2", CassetteProfile::fromFormulation(TapeFormulation::TypeIV), {}, tape.minutesPerSide * 60.0);
+    ctx.expectTrue(!project.sideA.clips.empty(), "cassette-specific project should include clips");
+}
+
+static void testBuildSequentialProjectCreatesTimeline(TestContext& ctx)
+{
+    FolderScanResult scan;
+    scan.success = true;
+    scan.gapBetweenTracksSec = 2.0;
+
+    for (int i = 0; i < 3; ++i)
+    {
+        FolderTrackInfo t;
+        t.displayName = "Track " + juce::String(i + 1);
+        t.durationSec = 4.0 * 60.0;
+        t.file = juce::File("/tmp/deck-seq-" + juce::String(i + 1) + ".wav");
+        scan.tracks.push_back(t);
+    }
+
+    scan.totalDurationSec = 3.0 * 4.0 * 60.0 + 2.0 * scan.gapBetweenTracksSec;
+    const auto profile = CassetteProfile::fromFormulation(TapeFormulation::TypeIV);
+    const auto project = FolderMixBuilder::buildSequentialProject(scan, "sequential", profile, {});
+
+    ctx.expectTrue(project.sideA.clips.size() + project.sideB.clips.size() == 3,
+                   "sequential project should place every track on a timeline");
+    ctx.expectTrue(project.sideA.usedDurationSec() > 0.0 || project.sideB.usedDurationSec() > 0.0,
+                   "sequential project should allocate clip durations");
+}
+
+static void testMidSideRoundTripPreservesLevel(TestContext& ctx)
+{
+    constexpr double sr = 48000.0;
+    auto buffer = makeSineBuffer(sr, 0.25, 440.0f, 0.42f, 2);
+    const auto before = peakAbs(buffer);
+
+    MidSideProcessor::toMidSide(buffer);
+    MidSideProcessor::fromMidSide(buffer);
+
+    ctx.expectTrue(bufferIsFinite(buffer), "mid/side round trip must stay finite");
+    ctx.expectNear(peakAbs(buffer), before, 0.05f, "mid/side round trip should preserve level");
+}
+
+static void testRubberBandWowProcessorStable(TestContext& ctx)
+{
+    constexpr double sr = 48000.0;
+    auto buffer = makeSineBuffer(sr, 1.0, 330.0f, 0.4f, 2);
+
+    RubberBandWowProcessor wow;
+    wow.prepare(sr, buffer.getNumSamples(), buffer.getNumChannels());
+    wow.setProfile(CassetteProfile::fromFormulation(TapeFormulation::CheapPortable));
+    wow.process(buffer);
+
+    ctx.expectTrue(bufferIsFinite(buffer), "rubberband wow/flutter output must stay finite");
+    ctx.expectTrue(peakAbs(buffer) > 0.03f, "rubberband wow/flutter should keep material audible");
+}
+
+static void testPerceptualQualityIdenticalBuffersPass(TestContext& ctx)
+{
+    constexpr double sr = 48000.0;
+    auto buffer = makeSineBuffer(sr, 0.5, 500.0f, 0.35f, 2);
+    const auto report = PerceptualQualityReport::compare(buffer, buffer, sr);
+
+    ctx.expectTrue(report.passesQualityGate, "identical reference/processed pair should pass quality gate");
+    ctx.expectTrue(report.objectiveDifferenceGrade >= -0.2f,
+                   "identical buffers should score near transparent");
+}
+
+static void testWavExporterRoundTrip(TestContext& ctx)
+{
+    constexpr double sr = 48000.0;
+    auto buffer = makeSineBuffer(sr, 0.2, 880.0f, 0.33f, 2);
+    const auto out = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("deck_wav_roundtrip.wav");
+    out.deleteFile();
+
+    ctx.expectTrue(WavExporter::writeWav32Float(out, buffer, sr), "wav exporter should write a file");
+    const auto loaded = AudioFileLoader::loadToBuffer(out);
+    ctx.expectTrue(loaded.hasValue(), "exported wav should reload");
+    if (loaded.hasValue())
+    {
+        ctx.expectTrue(loaded->buffer.getNumChannels() >= 1, "reloaded wav should have channels");
+        ctx.expectTrue(std::abs(loaded->buffer.getNumSamples() - buffer.getNumSamples()) <= 2,
+                       "reloaded wav should preserve sample length");
+        ctx.expectNear(peakAbs(loaded->buffer), peakAbs(buffer), 0.08f,
+                       "reloaded wav should preserve level approximately");
+    }
+
+    out.deleteFile();
+}
+
+static void testPreflightExportIncreasesPayload(TestContext& ctx)
+{
+    constexpr double sr = 48000.0;
+    juce::AudioBuffer<float> plain = makeSineBuffer(sr, 4.0, 440.0f, 0.25f, 2);
+    juce::AudioBuffer<float> withPreflight = plain;
+
+    PreflightOptions opts;
+    opts.title = "Export";
+    opts.sideLabel = "Side A";
+    PreflightTones::prependToBuffer(withPreflight, sr, opts);
+
+    const auto plainFile = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("deck_plain.wav");
+    const auto preflightFile = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("deck_preflight.wav");
+    plainFile.deleteFile();
+    preflightFile.deleteFile();
+
+    ctx.expectTrue(WavExporter::writeWav32Float(plainFile, plain, sr), "plain export should succeed");
+    ctx.expectTrue(WavExporter::writeWav32Float(preflightFile, withPreflight, sr), "preflight export should succeed");
+    ctx.expectTrue(preflightFile.getSize() > plainFile.getSize(),
+                   "preflight export should produce a larger wav than music-only export");
+    ctx.expectTrue(withPreflight.getNumSamples() > plain.getNumSamples(),
+                   "preflight buffer should be longer than source music");
+
+    plainFile.deleteFile();
+    preflightFile.deleteFile();
+}
+
+static void testAudioFileLoaderRejectsJunkExtension(TestContext& ctx)
+{
+    const auto junk = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("deck_not_audio.txt");
+    junk.replaceWithText("not audio");
+    ctx.expectTrue(!AudioFileLoader::isSupportedAudioFile(junk), "non-audio extension should be rejected");
+    junk.deleteFile();
+}
+
+static void testCassetteAutoMasterGainHelper(TestContext& ctx)
+{
+    ctx.expectNear(CassetteAutoMaster::calculateGainForTargetLUFS(-16.0f, -13.0f), 3.0f, 0.05f,
+                   "gain helper should move toward target LUFS");
+    ctx.expectNear(CassetteAutoMaster::calculateGainForTargetLUFS(-12.0f, -12.0f), 0.0f, 0.01f,
+                   "gain helper should be zero at target");
+}
+
+static void testMixtapeEditorActiveCassetteSwitch(TestContext& ctx)
+{
+    FolderScanResult scan;
+    scan.success = true;
+    scan.gapBetweenTracksSec = 2.0;
+
+    for (int i = 0; i < 7; ++i)
+    {
+        FolderTrackInfo t;
+        t.displayName = "Track " + juce::String(i + 1);
+        t.durationSec = 20.0 * 60.0;
+        scan.tracks.push_back(t);
+    }
+
+    scan.totalDurationSec = 7.0 * 20.0 * 60.0 + 6.0 * scan.gapBetweenTracksSec;
+    const auto tape = tapeLengthSpecForPreset(TapeLengthPreset::C120, 60.0);
+    const auto fit = FolderMixBuilder::analyzeFit(scan, tape);
+
+    MixtapeEditController editor;
+    editor.loadFromScan(scan, fit);
+    const auto cassette0First = editor.sideA().front().displayName;
+
+    editor.setActiveCassetteIndex(1);
+    ctx.expectTrue(editor.getActiveCassetteIndex() == 1, "active cassette index should switch");
+    const auto cassette1First = editor.sideA().front().displayName;
+    ctx.expectTrue(cassette1First != cassette0First, "second cassette should expose a different side A");
+
+    if (editor.sideA().size() > 1)
+    {
+        editor.reorderWithinSide(0, 0, 1);
+        const auto editedFirst = editor.sideA().front().displayName;
+        editor.setActiveCassetteIndex(0);
+        ctx.expectTrue(editor.sideA().front().displayName == cassette0First,
+                       "switching away should show the first cassette layout");
+        editor.setActiveCassetteIndex(1);
+        ctx.expectTrue(editor.sideA().front().displayName == editedFirst,
+                       "switching back should restore the edited second cassette layout");
+    }
+}
+
+static void testFolderFitReportSummary(TestContext& ctx)
+{
+    FolderScanResult scan;
+    scan.success = true;
+    scan.gapBetweenTracksSec = 2.0;
+    FolderTrackInfo t;
+    t.durationSec = 20.0 * 60.0;
+    scan.tracks.push_back(t);
+    scan.totalDurationSec = t.durationSec;
+
+    const auto tape = tapeLengthSpecForPreset(TapeLengthPreset::C60, 30.0);
+    const auto report = FolderMixBuilder::analyzeFit(scan, tape);
+    const auto summary = report.summary();
+
+    ctx.expectTrue(report.fitsOneSide, "20 minute track should fit on C60 side A");
+    ctx.expectTrue(summary.contains("C60"), "fit summary should mention tape preset");
+    ctx.expectTrue(summary.contains("fits"), "fit summary should state that material fits");
+}
+
 int main()
 {
     TestContext ctx;
@@ -925,6 +1884,33 @@ int main()
 #if defined(CASSETTE_HAS_ONNX) && defined(CASSETTE_STN_MODEL)
     testOnnxStnRunnerMatchesGrid(ctx);
 #endif
+
+    testAudioResamplerChangesSampleCount(ctx);
+    testPerceptualPlaybackProcessorStable(ctx);
+    testPreviewEngineMonitoringPath(ctx);
+    testDynamicEQAttenuatesHotSignal(ctx);
+    testTransientShaperBoostsAttack(ctx);
+    testWowFlutterEmulatorStable(ctx);
+    testTapeLengthPresets(ctx);
+    testFolderMixFormatDuration(ctx);
+    testDropPayloadFolderWinsOverAudioFile(ctx);
+    testKenwoodPreflightUsesAlternateToneStack(ctx);
+    testMixtapeEditorReorderUndoAndCrossSideMove(ctx);
+    testMixtapeEditorRebalanceClearsOverflow(ctx);
+    testMixtapeEditorMoveRowAndBatchDelete(ctx);
+    testMixtapeEditorMultiCassetteLayouts(ctx);
+    testBuildSequentialProjectCreatesTimeline(ctx);
+    testMidSideRoundTripPreservesLevel(ctx);
+    testRubberBandWowProcessorStable(ctx);
+    testPerceptualQualityIdenticalBuffersPass(ctx);
+    testWavExporterRoundTrip(ctx);
+    testPreflightExportIncreasesPayload(ctx);
+    testAudioFileLoaderRejectsJunkExtension(ctx);
+    testCassetteAutoMasterGainHelper(ctx);
+    testMixtapeEditorActiveCassetteSwitch(ctx);
+    testFolderFitReportSummary(ctx);
+
+    runFixtureAlbumIntegrationTests(ctx);
 
     std::cout << "----------------------------------------\n";
     if (ctx.failures == 0)

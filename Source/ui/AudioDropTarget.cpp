@@ -15,20 +15,6 @@ MainComponent* AudioDropForwarder::findMain() const
     return owner != nullptr ? owner->findParentComponentOfClass<MainComponent>() : nullptr;
 }
 
-DropPayloadKind AudioDropForwarder::payloadKind(const juce::StringArray& files)
-{
-    for (const auto& path : files)
-    {
-        if (AudioFileLoader::normaliseDroppedPath(path).isDirectory())
-            return DropPayloadKind::Folder;
-    }
-
-    if (AudioFileLoader::isSupportedAudioFileDrop(files))
-        return DropPayloadKind::AudioFile;
-
-    return DropPayloadKind::None;
-}
-
 bool AudioDropForwarder::isInterestedInFileDrag(const juce::StringArray& files)
 {
     if (auto* main = findMain())
@@ -43,7 +29,7 @@ void AudioDropForwarder::fileDragEnter(const juce::StringArray& files, int, int)
 
     ++dragDepth;
     if (onDragHoverChanged)
-        onDragHoverChanged(payloadKind(files));
+        onDragHoverChanged(classifyDropPayload(files));
 }
 
 void AudioDropForwarder::fileDragExit(const juce::StringArray&)

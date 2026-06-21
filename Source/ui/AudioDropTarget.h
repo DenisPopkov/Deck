@@ -2,18 +2,12 @@
 
 #include <juce_gui_extra/juce_gui_extra.h>
 #include <functional>
+#include "../io/DropPayload.h"
 
 namespace cassette
 {
 
 class MainComponent;
-
-enum class DropPayloadKind
-{
-    None,
-    AudioFile,
-    Folder
-};
 
 class AudioDropForwarder : public juce::FileDragAndDropTarget
 {
@@ -35,7 +29,6 @@ private:
     void filesDropped(const juce::StringArray& files, int x, int y) override;
 
     MainComponent* findMain() const;
-    static DropPayloadKind payloadKind(const juce::StringArray& files);
 };
 
 }

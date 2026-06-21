@@ -127,6 +127,14 @@ cmake --build build --target DeckTests
 ctest --test-dir build --output-on-failure
 ```
 
+Полный локальный прогон (mini-album в репо или evermore, если есть):
+
+```bash
+./scripts/run_audit.sh
+```
+
+Интеграция с альбомом: `CASSETTE_FIXTURE_ALBUM=Tests/Fixtures/mini-album`. Полный prepare 14+ треков: без `CASSETTE_SKIP_FULL_PREPARE`. CI: workflow **Tests** на Linux / Windows / macOS. Ручной QA перед релизом: [Tests/MANUAL_QA.md](Tests/MANUAL_QA.md).
+
 Или напрямую:
 
 ```bash
@@ -305,6 +313,14 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --target DeckTests
 ctest --test-dir build --output-on-failure
 ```
+
+Full local audit (repo mini-album or evermore when present):
+
+```bash
+./scripts/run_audit.sh
+```
+
+Album integration: `CASSETTE_FIXTURE_ALBUM=Tests/Fixtures/mini-album`. Full 14-track prepare: omit `CASSETTE_SKIP_FULL_PREPARE`. CI runs the **Tests** workflow on Linux / Windows / macOS. Pre-release manual QA: [Tests/MANUAL_QA.md](Tests/MANUAL_QA.md).
 
 Or run directly:
 

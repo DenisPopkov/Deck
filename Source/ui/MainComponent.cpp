@@ -10,6 +10,7 @@
 #include "../export/PreflightTones.h"
 #include "../project/SideRenderer.h"
 #include "../dsp/AudioConstants.h"
+#include "../io/DropPayload.h"
 #include "../util/AppLog.h"
 
 namespace cassette
@@ -995,21 +996,9 @@ void MainComponent::showMixtapeSide(bool sideB)
     }
 }
 
-DropPayloadKind MainComponent::dropPayloadKind(const juce::StringArray& files) const
-{
-    for (const auto& path : files)
-    {
-        if (AudioFileLoader::normaliseDroppedPath(path).isDirectory())
-            return DropPayloadKind::Folder;
-    }
-    if (AudioFileLoader::isSupportedAudioFileDrop(files))
-        return DropPayloadKind::AudioFile;
-    return DropPayloadKind::None;
-}
-
 void MainComponent::updateDropHighlight(const juce::StringArray& files, bool active)
 {
-    activeDropKind = active ? dropPayloadKind(files) : DropPayloadKind::None;
+    activeDropKind = active ? classifyDropPayload(files) : DropPayloadKind::None;
     dropHero.setDragHighlight(active, activeDropKind);
     compareWaveform.setDragHighlight(activeDropKind != DropPayloadKind::None, activeDropKind);
     repaint();
@@ -1020,12 +1009,7 @@ bool MainComponent::isInterestedInDrop(const juce::StringArray& files) const
     if (isProcessing.load())
         return false;
 
-    for (const auto& f : files)
-    {
-        if (AudioFileLoader::normaliseDroppedPath(f).isDirectory())
-            return true;
-    }
-    return AudioFileLoader::isSupportedAudioFileDrop(files);
+    return isDropPayloadInterested(files);
 }
 
 void MainComponent::exportWav()

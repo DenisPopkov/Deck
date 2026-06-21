@@ -77,7 +77,6 @@ private:
 
     void showMixtapeSide(bool sideB);
     void updateDropHighlight(const juce::StringArray& files, bool active);
-    DropPayloadKind dropPayloadKind(const juce::StringArray& files) const;
 
     TapeSetupPanel tapeSetupPanel;
     DropHeroPanel dropHero;
