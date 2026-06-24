@@ -103,11 +103,7 @@ jobs:
         run: |
           find artifacts -name 'Deck-Windows.zip' -exec cp {} . \;
           find artifacts -name 'Deck-Linux.tar.gz' -exec cp {} . \;
-          if [ -f docs/assets/Deck-macOS.zip ]; then
-            cp docs/assets/Deck-macOS.zip Deck-macOS.zip
-          else
-            find artifacts -name 'Deck-macOS.zip' -exec cp {} . \;
-          fi
+          find artifacts -name 'Deck-macOS.zip' -exec cp {} . \;
           ls -la Deck-macOS.zip Deck-Windows.zip Deck-Linux.tar.gz
 
       - name: Create GitHub Release
