@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(Deck VERSION 0.1.0 LANGUAGES C CXX)
+project(Deck VERSION 0.2.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -73,6 +73,7 @@ target_sources(Deck PRIVATE
     Source/Main.cpp
     Source/ui/MainComponent.cpp
     Source/ui/TapeSetupPanel.cpp
+    Source/ui/ProcessingOptionsPanel.cpp
     Source/ui/MixtapeBuilderPanel.cpp
     Source/ui/ReadinessPanel.cpp
     Source/ui/WorkflowStrip.cpp

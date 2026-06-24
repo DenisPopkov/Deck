@@ -15,6 +15,7 @@
 #include "../dsp/CassetteProfile.h"
 #include "../project/FolderMixBuilder.h"
 #include "../project/MixtapeEditController.h"
+#include "ProcessingOptionsPanel.h"
 #include "TrackListEditor.h"
 #include "../analysis/PerceptualQualityGuard.h"
 
@@ -79,6 +80,7 @@ private:
     void updateDropHighlight(const juce::StringArray& files, bool active);
 
     TapeSetupPanel tapeSetupPanel;
+    ProcessingOptionsPanel processingOptionsPanel;
     DropHeroPanel dropHero;
     WizardStepStrip wizardSteps;
     juce::Label readySummary { {}, "" };

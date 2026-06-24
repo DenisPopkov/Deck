@@ -68,6 +68,8 @@ bool MixtapeProject::saveToFile(const juce::File& file) const
     root->setProperty("maximumDigital", mastering.maximumDigital);
     root->setProperty("hfTamerIntensity", mastering.hfTamerIntensity);
     root->setProperty("perceptualAutoFallback", mastering.perceptualAutoFallback);
+    root->setProperty("enableTruePeakLimiter", mastering.enableTruePeakLimiter);
+    root->setProperty("enableStereoTightening", mastering.enableStereoTightening);
     root->setProperty("recLevelDb", recLevelDb);
     root->setProperty("biasDb", biasDb);
     root->setProperty("sideA", sideToVar(sideA));
@@ -95,6 +97,10 @@ bool MixtapeProject::loadFromFile(const juce::File& file)
         mastering.perceptualAutoFallback = root->getProperty("perceptualAutoFallback").isVoid()
             ? true
             : static_cast<bool>(root->getProperty("perceptualAutoFallback"));
+        if (!root->getProperty("enableTruePeakLimiter").isVoid())
+            mastering.enableTruePeakLimiter = static_cast<bool>(root->getProperty("enableTruePeakLimiter"));
+        if (!root->getProperty("enableStereoTightening").isVoid())
+            mastering.enableStereoTightening = static_cast<bool>(root->getProperty("enableStereoTightening"));
         recLevelDb = static_cast<float>(static_cast<double>(root->getProperty("recLevelDb")));
         biasDb = static_cast<float>(static_cast<double>(root->getProperty("biasDb")));
         sideFromVar(sideA, root->getProperty("sideA"));

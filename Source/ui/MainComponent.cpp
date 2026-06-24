@@ -21,6 +21,7 @@ MainComponent::MainComponent()
     using namespace ui;
 
     for (auto* c : { static_cast<juce::Component*>(&importButton),
+                     static_cast<juce::Component*>(&processingOptionsPanel),
                      static_cast<juce::Component*>(&tapeSetupPanel),
                      static_cast<juce::Component*>(&dropHero),
                      static_cast<juce::Component*>(&wizardSteps),
@@ -54,6 +55,12 @@ MainComponent::MainComponent()
         syncLayout();
     };
     tapeSetupPanel.onChangeTapeTypeRequested = [this] { promptChangeTapeType(); };
+
+    processingOptionsPanel.onChanged = [this] {
+        if (hasProcessed)
+            invalidatePreparedOutput();
+        syncLayout();
+    };
 
     Theme::applyLabel(readySummary, Theme::metricFont(), Theme::okGreen());
     readySummary.setVisible(false);
@@ -159,6 +166,7 @@ void MainComponent::updateWizardState()
     importButton.setEnabled(!busy);
     dropHero.setInteractionEnabled(!busy);
     tapeSetupPanel.setInteractionEnabled(!busy);
+    processingOptionsPanel.setInteractionEnabled(!busy);
     tapeSetupPanel.setTapeTypeLocked(hasProcessed && !busy);
     mixtapePanel.setBusy(busy);
 
@@ -205,7 +213,11 @@ void MainComponent::updateWaveformInfo(const AudioFeatures& source, const AudioF
 
 MasteringOptions MainComponent::currentMasteringOptions() const
 {
-    return tapeSetup().getMasteringOptions();
+    auto options = tapeSetup().getMasteringOptions();
+    const auto chain = processingOptionsPanel.getOptions();
+    options.enableTruePeakLimiter = chain.enableTruePeakLimiter;
+    options.enableStereoTightening = chain.enableStereoTightening;
+    return options;
 }
 
 TapeFormulation MainComponent::getSelectedProfile() const
@@ -270,6 +282,8 @@ void MainComponent::resized()
     newButton.setBounds(left.removeFromTop(36));
     left.removeFromTop(10);
     importButton.setBounds(left.removeFromTop(36));
+    left.removeFromTop(14);
+    processingOptionsPanel.setBounds(left.removeFromTop(68));
 
     auto topBar = centre.removeFromTop(56).reduced(14, 12);
 

@@ -612,6 +612,77 @@ static void testSideLfMonoInFullTapePrep(TestContext& ctx)
                    "full tape prep should mono-maker side LF");
 }
 
+static void testDisabledStereoTighteningPreservesWideBass(TestContext& ctx)
+{
+    constexpr double sr = 48000.0;
+    const int n = static_cast<int>(sr * 4.0);
+    juce::AudioBuffer<float> tightBuffer(2, n);
+    juce::AudioBuffer<float> looseBuffer(2, n);
+
+    for (int i = 0; i < n; ++i)
+    {
+        const auto t = static_cast<double>(i) / sr;
+        const auto bass = 0.55f * std::sin(2.0 * juce::MathConstants<double>::pi * 55.0 * t);
+        tightBuffer.setSample(0, i, bass);
+        tightBuffer.setSample(1, i, -bass);
+        looseBuffer.setSample(0, i, bass);
+        looseBuffer.setSample(1, i, -bass);
+    }
+
+    MasteringOptions tightened;
+    tightened.maximumDigital = false;
+    tightened.enableStereoTightening = true;
+    processAndAnalyze(tightBuffer, sr, CassetteProfile::fromFormulation(TapeFormulation::TypeIV), tightened);
+
+    MasteringOptions loose;
+    loose.maximumDigital = false;
+    loose.enableStereoTightening = false;
+    processAndAnalyze(looseBuffer, sr, CassetteProfile::fromFormulation(TapeFormulation::TypeIV), loose);
+
+    const auto sideTight = sideChannelRms(tightBuffer);
+    const auto sideLoose = sideChannelRms(looseBuffer);
+
+    ctx.expectTrue(sideLoose > sideTight * 1.35f,
+                   "disabled stereo tightening should keep more wide bass than enabled path");
+}
+
+static void testDisabledTruePeakLimiterAllowsHotPeaks(TestContext& ctx)
+{
+    constexpr double sr = 48000.0;
+    const int n = static_cast<int>(sr * 8.0);
+    juce::AudioBuffer<float> limitedBuffer(2, n);
+    juce::AudioBuffer<float> unlimitedBuffer(2, n);
+    limitedBuffer.clear();
+    unlimitedBuffer.clear();
+
+    const int hop = static_cast<int>(sr * 0.02);
+    for (int i = 0; i < n; i += hop)
+    {
+        constexpr float amp = 0.95f;
+        limitedBuffer.setSample(0, i, amp);
+        limitedBuffer.setSample(1, i, amp);
+        unlimitedBuffer.setSample(0, i, amp);
+        unlimitedBuffer.setSample(1, i, amp);
+    }
+
+    const auto profile = CassetteProfile::fromFormulation(TapeFormulation::TypeII);
+
+    MasteringOptions limited;
+    limited.maximumDigital = true;
+    limited.enableTruePeakLimiter = true;
+    const auto limitedAfter = processAndAnalyze(limitedBuffer, sr, profile, limited);
+
+    MasteringOptions unlimited;
+    unlimited.maximumDigital = true;
+    unlimited.enableTruePeakLimiter = false;
+    const auto unlimitedAfter = processAndAnalyze(unlimitedBuffer, sr, profile, unlimited);
+
+    ctx.expectTrue(limitedAfter.truePeakDbfs <= profile.truePeakCeilingDbfs + 0.35f,
+                   "enabled limiter should respect ceiling");
+    ctx.expectTrue(unlimitedAfter.truePeakDbfs > limitedAfter.truePeakDbfs + 0.1f,
+                   "disabled limiter should leave hotter peaks than enabled path");
+}
+
 static void testPsychoacousticMetricsPresent(TestContext& ctx)
 {
     constexpr double sr = 48000.0;
@@ -1850,6 +1921,8 @@ int main()
     testLfMonoStageAttenuatesSideBass(ctx);
     testAdaptiveHfTamingDoesNotBoostHighs(ctx);
     testSideLfMonoInFullTapePrep(ctx);
+    testDisabledStereoTighteningPreservesWideBass(ctx);
+    testDisabledTruePeakLimiterAllowsHotPeaks(ctx);
     testPsychoacousticMetricsPresent(ctx);
     testRoughnessHigherOnModulatedHf(ctx);
     testAdaptiveFallbackProducesQualityReport(ctx);

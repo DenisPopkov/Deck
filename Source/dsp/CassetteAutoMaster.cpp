@@ -303,12 +303,15 @@ float computeGainDb(const CassetteProfile& profile,
     const float sourceLUFS = features.integratedLUFS;
     const float capLUFS = profile.maxIntegratedLUFS;
     const float lufsGain = CassetteAutoMaster::calculateGainForTargetLUFS(sourceLUFS, capLUFS);
-    const float peakGain = profile.truePeakCeilingDbfs - features.truePeakDbfs;
+    const float peakGain = options.enableTruePeakLimiter
+                               ? profile.truePeakCeilingDbfs - features.truePeakDbfs
+                               : 0.0f;
 
     if (options.maximumDigital)
     {
         const bool hotLufs = sourceLUFS > capLUFS + 0.25f;
-        const bool hotPeak = features.truePeakDbfs > profile.truePeakCeilingDbfs + 0.05f;
+        const bool hotPeak = options.enableTruePeakLimiter
+                                 && features.truePeakDbfs > profile.truePeakCeilingDbfs + 0.05f;
 
         if (hotLufs && hotPeak)
             return juce::jmax(lufsGain, peakGain);
@@ -323,7 +326,8 @@ float computeGainDb(const CassetteProfile& profile,
     }
 
     const bool hotLufs = sourceLUFS > capLUFS + 0.25f;
-    const bool hotPeak = features.truePeakDbfs > profile.truePeakCeilingDbfs + 0.05f;
+    const bool hotPeak = options.enableTruePeakLimiter
+                             && features.truePeakDbfs > profile.truePeakCeilingDbfs + 0.05f;
 
     if (hotLufs && hotPeak)
         return juce::jmax(lufsGain, peakGain);
@@ -349,7 +353,8 @@ void applyPostChainLoudnessTrim(juce::AudioBuffer<float>& buffer,
     const float target = profile.maxIntegratedLUFS;
 
     const bool sourceNeededLevelTrim = sourceFeatures.integratedLUFS > target + 0.25f
-                                       || sourceFeatures.truePeakDbfs > profile.truePeakCeilingDbfs + 0.05f;
+                                       || (options.enableTruePeakLimiter
+                                           && sourceFeatures.truePeakDbfs > profile.truePeakCeilingDbfs + 0.05f);
 
     TruePeakLimiter tpl;
     tpl.setThresholdDbfs(profile.truePeakCeilingDbfs);
@@ -381,7 +386,7 @@ void applyPostChainLoudnessTrim(juce::AudioBuffer<float>& buffer,
 
         buffer.applyGain(juce::Decibels::decibelsToGain(makeupDb));
 
-        if (makeupDb > 0.05f && !options.maximumDigital)
+        if (makeupDb > 0.05f && !options.maximumDigital && options.enableTruePeakLimiter)
         {
             const float tp = TruePeakMeter::measurePeakDbfs(buffer, sampleRate);
             if (tp > profile.truePeakCeilingDbfs + 0.03f)
@@ -443,9 +448,12 @@ void CassetteAutoMaster::processTrack(juce::AudioBuffer<float>& buffer,
 
     if (!options.maximumDigital)
     {
-        applySideLfMono(buffer, profile.sideLowCutHz, sampleRate);
-        if (options.hfTamerIntensity > 0.15f)
-            applySideHfCut(buffer, profile.sideHighCutHz, sampleRate);
+        if (options.enableStereoTightening)
+        {
+            applySideLfMono(buffer, profile.sideLowCutHz, sampleRate);
+            if (options.hfTamerIntensity > 0.15f)
+                applySideHfCut(buffer, profile.sideHighCutHz, sampleRate);
+        }
         applyMaskingAwareHfTamer(buffer, profile, features, sampleRate, options);
 
         RoughnessDeEsser roughnessDeEsser;
@@ -521,7 +529,7 @@ void CassetteAutoMaster::processTrack(juce::AudioBuffer<float>& buffer,
     tpl.setThresholdDbfs(profile.truePeakCeilingDbfs);
     tpl.prepare(sampleRate);
 
-    if (!options.maximumDigital)
+    if (!options.maximumDigital && options.enableTruePeakLimiter)
         tpl.process(buffer);
 
     if (profile.addMicroWowMasking)
@@ -548,7 +556,7 @@ void CassetteAutoMaster::processTrack(juce::AudioBuffer<float>& buffer,
 
     applyPostChainLoudnessTrim(buffer, profile, features, options, sampleRate);
 
-    if (options.maximumDigital)
+    if (options.maximumDigital && options.enableTruePeakLimiter)
     {
         const float tp = TruePeakMeter::measurePeakDbfs(buffer, sampleRate);
         if (tp > profile.truePeakCeilingDbfs + 0.03f)
