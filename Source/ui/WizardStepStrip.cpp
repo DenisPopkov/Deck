@@ -1,5 +1,6 @@
 #include "WizardStepStrip.h"
 #include "UiTheme.h"
+#include "../util/AppLocale.h"
 
 namespace cassette
 {
@@ -26,7 +27,10 @@ void WizardStepStrip::paint(juce::Graphics& g)
 {
     using namespace ui;
 
-    const juce::String titles[] = { "Add music", "Edit tracks", "Prepare", "Export" };
+    const juce::String titles[] = { tr("wizard.add_music"),
+                                      tr("wizard.edit_tracks"),
+                                      tr("wizard.prepare"),
+                                      tr("wizard.export") };
     const bool done[] = { musicDone, editDone, prepareDone, exportDone };
     const WizardPhase phases[] = { WizardPhase::AddMusic,
                                    WizardPhase::EditTracks,

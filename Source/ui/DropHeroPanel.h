@@ -16,6 +16,7 @@ public:
 
     void setDragHighlight(bool active, DropPayloadKind kind);
     void setInteractionEnabled(bool enabled);
+    void refreshLocalisedText();
     void paint(juce::Graphics& g) override;
     void resized() override;
 

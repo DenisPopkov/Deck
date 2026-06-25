@@ -25,6 +25,7 @@ public:
     void setTapeSpec(const TapeLengthSpec& tape);
     void refresh();
     void setLoading(bool loading);
+    void refreshLocalisedText();
     void attachToAudioDevice(juce::AudioDeviceManager& deviceManager);
     void shutdownPreviewAudio();
 

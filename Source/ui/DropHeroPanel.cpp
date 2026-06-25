@@ -1,5 +1,6 @@
 #include "DropHeroPanel.h"
 #include "UiTheme.h"
+#include "../util/AppLocale.h"
 
 namespace cassette
 {
@@ -9,7 +10,7 @@ DropHeroPanel::DropHeroPanel()
     initAudioDropForwarding(this);
     addAndMakeVisible(chooseFolderButton);
     ui::Theme::styleBlackButton(chooseFolderButton);
-    chooseFolderButton.setButtonText("Import folder");
+    chooseFolderButton.setButtonText(tr("btn.import_folder"));
     chooseFolderButton.onClick = [this] {
         if (onChooseFolder)
             onChooseFolder();
@@ -24,6 +25,12 @@ void DropHeroPanel::setDragHighlight(bool active, DropPayloadKind kind)
 {
     dragHighlight = active;
     dropKind = kind;
+    repaint();
+}
+
+void DropHeroPanel::refreshLocalisedText()
+{
+    chooseFolderButton.setButtonText(tr("btn.import_folder"));
     repaint();
 }
 
@@ -72,9 +79,9 @@ void DropHeroPanel::paint(juce::Graphics& g)
     auto textArea = getLocalBounds().reduced(24).withTrimmedBottom(56);
     g.setColour(Theme::textPrimary());
     g.setFont(Theme::bodyFont().boldened());
-    g.drawFittedText(dragHighlight ? (dropKind == DropPayloadKind::Folder ? "Drop folder here"
-                                                                        : "Drop audio here")
-                                 : "Drop music here",
+    g.drawFittedText(dragHighlight ? (dropKind == DropPayloadKind::Folder ? tr("drop.folder")
+                                                                        : tr("drop.audio"))
+                                 : tr("drop.music"),
                      textArea,
                      juce::Justification::centred,
                      1);

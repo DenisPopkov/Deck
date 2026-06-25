@@ -74,6 +74,7 @@ target_sources(Deck PRIVATE
     Source/ui/MainComponent.cpp
     Source/ui/TapeSetupPanel.cpp
     Source/ui/ProcessingOptionsPanel.cpp
+    Source/ui/ProcessingSettingsDialog.cpp
     Source/ui/MixtapeBuilderPanel.cpp
     Source/ui/ReadinessPanel.cpp
     Source/ui/WorkflowStrip.cpp
@@ -89,6 +90,7 @@ target_sources(Deck PRIVATE
     Source/ui/MoreOptionsPanel.cpp
     Source/threading/AnalysisWorker.cpp
     Source/util/AppLog.cpp
+    Source/util/AppLocale.cpp
 )
 
 target_include_directories(Deck PRIVATE

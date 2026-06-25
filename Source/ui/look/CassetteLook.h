@@ -15,6 +15,8 @@ public:
     juce::Font getComboBoxFont(juce::ComboBox&) override;
     juce::Font getPopupMenuFont() override;
 
+    void drawLabel(juce::Graphics& g, juce::Label& label) override;
+
     void drawButtonBackground(juce::Graphics& g,
                               juce::Button& button,
                               const juce::Colour& backgroundColour,
@@ -25,6 +27,13 @@ public:
                         juce::TextButton& button,
                         bool shouldDrawButtonAsHighlighted,
                         bool shouldDrawButtonAsDown) override;
+
+    void drawToggleButton(juce::Graphics& g,
+                          juce::ToggleButton& button,
+                          bool shouldDrawButtonAsHighlighted,
+                          bool shouldDrawButtonAsDown) override;
+
+    void drawTooltip(juce::Graphics& g, const juce::String& text, int width, int height) override;
 
 private:
     static juce::Font buttonFontForHeight(int buttonHeight, bool compact);

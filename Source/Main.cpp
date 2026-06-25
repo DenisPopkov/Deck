@@ -36,6 +36,7 @@ private:
                       .findColour(juce::ResizableWindow::backgroundColourId),
                   DocumentWindow::allButtons)
         {
+            tooltipWindow = std::make_unique<juce::TooltipWindow>(this, 350);
             setUsingNativeTitleBar(true);
             setContentOwned(new cassette::MainComponent(), true);
 
@@ -77,6 +78,8 @@ private:
 
             return false;
         }
+
+        std::unique_ptr<juce::TooltipWindow> tooltipWindow;
     };
 
     std::unique_ptr<MainWindow> mainWindow;

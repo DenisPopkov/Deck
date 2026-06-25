@@ -35,8 +35,7 @@ struct Theme
     static juce::Font uiFont(float height, juce::Font::FontStyleFlags style = juce::Font::plain)
     {
 #if JUCE_MAC
-        juce::ignoreUnused(style);
-        return juce::Font(juce::FontOptions("SF Pro Text", height, juce::Font::plain));
+        return juce::Font(juce::FontOptions("SF Pro Text", height, style));
 #else
         return juce::Font(juce::FontOptions(height, style));
 #endif
@@ -51,14 +50,22 @@ struct Theme
 #endif
     }
 
-    static juce::Font titleFont() { return uiFont(16.0f, juce::Font::bold).boldened(); }
-    static juce::Font sectionFont() { return uiFont(11.5f, juce::Font::bold).boldened(); }
+    static juce::Font titleFont() { return uiFont(16.0f, juce::Font::bold); }
+    static juce::Font sectionFont() { return uiFont(11.5f, juce::Font::bold); }
     static juce::Font bodyFont() { return uiFont(13.0f); }
     static juce::Font buttonFont() { return uiFont(13.0f); }
     static juce::Font buttonFontSmall() { return uiFont(11.0f); }
     static juce::Font captionFont() { return uiFont(11.0f); }
+    static juce::Font captionFontSemibold()
+    {
+#if JUCE_MAC
+        return juce::Font(juce::FontOptions("SF Pro Text", "Semibold", 11.0f));
+#else
+        return uiFont(11.0f, juce::Font::bold);
+#endif
+    }
     static juce::Font metricFont() { return monoFont(12.0f); }
-    static juce::Font scoreFont() { return uiFont(22.0f, juce::Font::bold).boldened(); }
+    static juce::Font scoreFont() { return uiFont(22.0f, juce::Font::bold); }
 
     static void applyLabel(juce::Label& label,
                            const juce::Font& font,

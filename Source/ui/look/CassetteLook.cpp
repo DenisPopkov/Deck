@@ -15,6 +15,9 @@ CassetteLook::CassetteLook() : juce::LookAndFeel_V4(getLightColourScheme())
     setColour(juce::PopupMenu::highlightedBackgroundColourId, ui::Theme::accent().withAlpha(0.14f));
     setColour(juce::PopupMenu::highlightedTextColourId, ui::Theme::accent());
     setColour(juce::Label::textColourId, ui::Theme::textPrimary());
+    setColour(juce::TooltipWindow::backgroundColourId, ui::Theme::card());
+    setColour(juce::TooltipWindow::textColourId, ui::Theme::textSecondary());
+    setColour(juce::TooltipWindow::outlineColourId, ui::Theme::border());
 }
 
 juce::Font CassetteLook::buttonFontForHeight(int buttonHeight, bool compact)
@@ -26,16 +29,44 @@ juce::Font CassetteLook::buttonFontForHeight(int buttonHeight, bool compact)
 
 juce::Font CassetteLook::getTextButtonFont(juce::TextButton& button, int buttonHeight)
 {
-    const auto text = button.getButtonText();
-    const bool compactTapeSegment = text.startsWithIgnoreCase("Type I")
-                                    || text.startsWithIgnoreCase("Type II")
-                                    || text.startsWithIgnoreCase("Type IV");
+    const bool compactTapeSegment = button.getComponentID() == "tape-type-segment";
     return buttonFontForHeight(buttonHeight, compactTapeSegment);
 }
 
-juce::Font CassetteLook::getLabelFont(juce::Label&)
+juce::Font CassetteLook::getLabelFont(juce::Label& label)
 {
+    const auto id = label.getComponentID();
+    if (id.startsWith("settings-"))
+        return label.getFont();
     return ui::Theme::bodyFont();
+}
+
+void CassetteLook::drawLabel(juce::Graphics& g, juce::Label& label)
+{
+    const auto id = label.getComponentID();
+    if (id.startsWith("settings-"))
+    {
+        g.fillAll(label.findColour(juce::Label::backgroundColourId));
+
+        if (!label.isBeingEdited())
+        {
+            const float alpha = label.isEnabled() ? 1.0f : 0.5f;
+            const auto font = label.getFont();
+            g.setColour(label.findColour(juce::Label::textColourId).withMultipliedAlpha(alpha));
+            g.setFont(font);
+
+            auto textArea = label.getBorderSize().subtractedFrom(label.getLocalBounds());
+            g.drawFittedText(label.getText(),
+                             textArea,
+                             label.getJustificationType(),
+                             juce::jmax(1, (int) ((float) textArea.getHeight() / font.getHeight())),
+                             label.getMinimumHorizontalScale());
+        }
+
+        return;
+    }
+
+    juce::LookAndFeel_V4::drawLabel(g, label);
 }
 
 juce::Font CassetteLook::getComboBoxFont(juce::ComboBox&)
@@ -87,6 +118,45 @@ void CassetteLook::drawButtonText(juce::Graphics& g,
 
     auto textArea = button.getLocalBounds().reduced(4, 2);
     g.drawText(button.getButtonText(), textArea, juce::Justification::centred);
+}
+
+void CassetteLook::drawToggleButton(juce::Graphics& g,
+                                    juce::ToggleButton& button,
+                                    bool shouldDrawButtonAsHighlighted,
+                                    bool shouldDrawButtonAsDown)
+{
+    if (button.getComponentID() == "settings-checkbox")
+    {
+        const float tickWidth = juce::jmin(16.0f, (float) button.getHeight() - 4.0f);
+        const float x = ((float) button.getWidth() - tickWidth) * 0.5f;
+        const float y = ((float) button.getHeight() - tickWidth) * 0.5f;
+        drawTickBox(g,
+                    button,
+                    x,
+                    y,
+                    tickWidth,
+                    tickWidth,
+                    button.getToggleState(),
+                    button.isEnabled(),
+                    shouldDrawButtonAsHighlighted,
+                    shouldDrawButtonAsDown);
+        return;
+    }
+
+    juce::LookAndFeel_V4::drawToggleButton(g, button, shouldDrawButtonAsHighlighted, shouldDrawButtonAsDown);
+}
+
+void CassetteLook::drawTooltip(juce::Graphics& g, const juce::String& text, int width, int height)
+{
+    const auto bounds = juce::Rectangle<int>(width, height);
+    ui::Theme::drawPanel(g, bounds, true);
+
+    g.setColour(ui::Theme::textSecondary());
+    g.setFont(ui::Theme::captionFont());
+    g.drawFittedText(text,
+                     bounds.reduced(10, 8),
+                     juce::Justification::topLeft,
+                     8);
 }
 
 }

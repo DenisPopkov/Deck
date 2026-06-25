@@ -40,6 +40,7 @@ public:
     bool isCustomTapeLengthSelected() const;
     bool isPreflightEnabled() const { return preflightToggle.getToggleState(); }
     void triggerPrepare() { if (onPrepareClicked) onPrepareClicked(); }
+    void refreshLocalisedText();
 
 private:
     void resized() override;

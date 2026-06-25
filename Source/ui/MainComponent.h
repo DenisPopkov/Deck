@@ -15,7 +15,7 @@
 #include "../dsp/CassetteProfile.h"
 #include "../project/FolderMixBuilder.h"
 #include "../project/MixtapeEditController.h"
-#include "ProcessingOptionsPanel.h"
+#include "ProcessingSettingsDialog.h"
 #include "TrackListEditor.h"
 #include "../analysis/PerceptualQualityGuard.h"
 
@@ -62,6 +62,8 @@ private:
     void resetSession();
     void invalidatePreparedOutput();
     void promptChangeTapeType();
+    void showProcessingSettings();
+    void refreshUiText();
 
     MasteringOptions currentMasteringOptions() const;
     TapeFormulation getSelectedProfile() const;
@@ -80,13 +82,13 @@ private:
     void updateDropHighlight(const juce::StringArray& files, bool active);
 
     TapeSetupPanel tapeSetupPanel;
-    ProcessingOptionsPanel processingOptionsPanel;
     DropHeroPanel dropHero;
     WizardStepStrip wizardSteps;
     juce::Label readySummary { {}, "" };
 
     juce::TextButton newButton { "New" };
     juce::TextButton importButton { "Import audio" };
+    juce::TextButton settingsButton { "Settings" };
     juce::TextButton startButton { "Prepare" };
     juce::TextButton exportButton { "Export WAV" };
 
@@ -118,6 +120,7 @@ private:
     std::optional<FolderScanResult> folderScan;
     std::optional<PerceptualQualityReport> lastQuality;
     std::optional<AudioFeatures> lastProcessedFeatures;
+    MasteringOptions processingChainOptions;
     std::optional<LoadedAudio> sideAAudio;
     std::optional<LoadedAudio> sideBAudio;
     std::optional<LoadedAudio> mixtapeReferenceAudio;

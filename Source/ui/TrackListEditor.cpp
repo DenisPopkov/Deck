@@ -2,6 +2,7 @@
 #include "ConfirmDialog.h"
 #include "UiTheme.h"
 #include "../io/AudioFileLoader.h"
+#include "../util/AppLocale.h"
 
 namespace cassette
 {
@@ -842,7 +843,7 @@ TrackListEditor::TrackListEditor()
     sideALabel.setBorderSize(juce::BorderSize<int>());
     sideBLabel.setBorderSize(juce::BorderSize<int>());
     Theme::applyLabel(loadingLabel, Theme::sectionFont(), Theme::textSecondary(), juce::Justification::centred);
-    loadingLabel.setText("Loading tracks...", juce::dontSendNotification);
+    loadingLabel.setText(tr("track.loading"), juce::dontSendNotification);
 
     Theme::styleNeutralButton(selectTracksButton);
     Theme::styleNeutralButton(deleteSelectedButton);
@@ -932,7 +933,7 @@ void TrackListEditor::setSelectionMode(bool on)
         sideBList.clearChecked();
     }
 
-    selectTracksButton.setButtonText(on ? "Done" : "Select tracks");
+    selectTracksButton.setButtonText(on ? tr("btn.done") : tr("btn.select_tracks"));
     deleteSelectedButton.setVisible(on);
     updateDeleteButtonState();
     sideAList.repaint();
@@ -958,6 +959,14 @@ void TrackListEditor::setLoading(bool loadingIn)
     miniPlayer.setVisible(showEditor && miniPlayerVisible);
     resized();
     repaint();
+}
+
+void TrackListEditor::refreshLocalisedText()
+{
+    loadingLabel.setText(tr("track.loading"), juce::dontSendNotification);
+    selectTracksButton.setButtonText(selectionMode ? tr("btn.done") : tr("btn.select_tracks"));
+    updateDeleteButtonState();
+    refresh();
 }
 
 void TrackListEditor::setController(MixtapeEditController* controllerIn)
@@ -1038,8 +1047,8 @@ void TrackListEditor::updateDeleteButtonState()
 {
     const int count = totalCheckedCount();
     deleteSelectedButton.setEnabled(!loading && selectionMode && count > 0);
-    deleteSelectedButton.setButtonText(count > 0 ? "Remove selected (" + juce::String(count) + ")"
-                                                 : "Remove selected");
+    deleteSelectedButton.setButtonText(count > 0 ? tr("btn.remove_selected") + " (" + juce::String(count) + ")"
+                                                 : tr("btn.remove_selected"));
 }
 
 void TrackListEditor::confirmAndDeleteSelected()
@@ -1051,13 +1060,12 @@ void TrackListEditor::confirmAndDeleteSelected()
     if (items.empty())
         return;
 
+    const int count = static_cast<int>(items.size());
     ui::ConfirmDialogOptions options;
-    options.title = "Remove tracks";
-    options.message = "Remove " + juce::String(items.size()) + " selected track"
-                      + (items.size() == 1 ? "" : "s") + " from the mixtape?\n"
-                      + "Files on disk will not be deleted.";
-    options.confirmLabel = "Remove";
-    options.cancelLabel = "Cancel";
+    options.title = tr("dialog.remove_tracks.title");
+    options.message = trRemoveTracksMessage(count);
+    options.confirmLabel = tr("dialog.remove_tracks.confirm");
+    options.cancelLabel = tr("dialog.cancel");
 
     ui::showConfirmDialog(this, options, [this, items](bool confirmed) {
         if (!confirmed || controller == nullptr)
@@ -1247,16 +1255,16 @@ void TrackListEditor::refresh()
     const auto accent = sideAccentColour();
     const auto sideHeader = [&](int sideIndex) {
         if (controller == nullptr)
-            return juce::String(sideIndex == 0 ? "Side A" : "Side B");
+            return sideIndex == 0 ? tr("track.side_a") : tr("track.side_b");
 
         const auto& tracks = sideIndex == 0 ? controller->sideA() : controller->sideB();
         const double used = FolderMixBuilder::sideDurationSec(tracks, controller->gapBetweenTracksSec());
         const double cap = tape.minutesPerSide * 60.0;
-        const auto side = juce::String(sideIndex == 0 ? "Side A" : "Side B");
+        const auto side = sideIndex == 0 ? tr("track.side_a") : tr("track.side_b");
         const bool overflow = used > cap + controller->gapBetweenTracksSec() * 2.0 + 1.0;
-        return side + "  " + juce::String(tracks.size()) + " tracks  "
+        return side + "  " + juce::String(tracks.size()) + " " + tr("track.tracks") + "  "
                + FolderMixBuilder::formatDuration(used) + " / " + FolderMixBuilder::formatDuration(cap)
-               + (overflow ? "  OVERFLOW" : "");
+               + (overflow ? "  " + tr("track.overflow") : "");
     };
 
     sideALabel.setText(sideHeader(0), juce::dontSendNotification);

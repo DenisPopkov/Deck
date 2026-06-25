@@ -12,6 +12,7 @@
 #include "../dsp/AudioConstants.h"
 #include "../io/DropPayload.h"
 #include "../util/AppLog.h"
+#include "../util/AppLocale.h"
 
 namespace cassette
 {
@@ -20,15 +21,15 @@ MainComponent::MainComponent()
 {
     using namespace ui;
 
-    for (auto* c : { static_cast<juce::Component*>(&importButton),
-                     static_cast<juce::Component*>(&processingOptionsPanel),
-                     static_cast<juce::Component*>(&tapeSetupPanel),
+    for (auto* c : { static_cast<juce::Component*>(&tapeSetupPanel),
                      static_cast<juce::Component*>(&dropHero),
                      static_cast<juce::Component*>(&wizardSteps),
                      static_cast<juce::Component*>(&readySummary),
                      static_cast<juce::Component*>(&compareWaveform),
                      static_cast<juce::Component*>(&trackListEditor),
                      static_cast<juce::Component*>(&newButton),
+                     static_cast<juce::Component*>(&importButton),
+                     static_cast<juce::Component*>(&settingsButton),
                      static_cast<juce::Component*>(&startButton),
                      static_cast<juce::Component*>(&exportButton),
                      static_cast<juce::Component*>(&status) })
@@ -56,11 +57,8 @@ MainComponent::MainComponent()
     };
     tapeSetupPanel.onChangeTapeTypeRequested = [this] { promptChangeTapeType(); };
 
-    processingOptionsPanel.onChanged = [this] {
-        if (hasProcessed)
-            invalidatePreparedOutput();
-        syncLayout();
-    };
+    Theme::styleNeutralButton(settingsButton);
+    settingsButton.addListener(this);
 
     Theme::applyLabel(readySummary, Theme::metricFont(), Theme::okGreen());
     readySummary.setVisible(false);
@@ -69,7 +67,6 @@ MainComponent::MainComponent()
     Theme::styleExportButton(exportButton);
     Theme::styleNeutralButton(newButton);
     Theme::styleBlackButton(importButton);
-    exportButton.setButtonText("Export WAV");
     newButton.addListener(this);
     importButton.addListener(this);
     startButton.addListener(this);
@@ -98,6 +95,7 @@ MainComponent::MainComponent()
     };
 
     setStatus({}, Theme::textSecondary());
+    refreshUiText();
     startTimerHz(12);
     setWantsKeyboardFocus(true);
     setSize(1180, 820);
@@ -121,17 +119,33 @@ void MainComponent::setStatus(const juce::String& text, juce::Colour colour)
     status.setVisible(text.isNotEmpty());
 }
 
+void MainComponent::refreshUiText()
+{
+    newButton.setButtonText(tr("btn.new"));
+    importButton.setButtonText(tr("btn.import_audio"));
+    settingsButton.setButtonText(tr("btn.settings"));
+    startButton.setButtonText(tr("btn.prepare"));
+    exportButton.setButtonText(tr("btn.export_wav"));
+    tapeSetupPanel.refreshLocalisedText();
+    dropHero.refreshLocalisedText();
+    trackListEditor.refreshLocalisedText();
+    wizardSteps.repaint();
+    syncTransportButtonStyles();
+}
+
 void MainComponent::syncTransportButtonStyles()
 {
     using ui::Theme;
 
     Theme::applyTransportButtonStyle(newButton, Theme::TransportButtonStyle::Neutral, newButton.isEnabled());
     Theme::applyTransportButtonStyle(importButton, Theme::TransportButtonStyle::Black, importButton.isEnabled());
+    Theme::applyTransportButtonStyle(settingsButton, Theme::TransportButtonStyle::Neutral, settingsButton.isEnabled());
     Theme::applyTransportButtonStyle(startButton, Theme::TransportButtonStyle::Rec, startButton.isEnabled());
     Theme::applyTransportButtonStyle(exportButton, Theme::TransportButtonStyle::Export, exportButton.isEnabled());
 
     newButton.repaint();
     importButton.repaint();
+    settingsButton.repaint();
     startButton.repaint();
     exportButton.repaint();
 }
@@ -166,15 +180,15 @@ void MainComponent::updateWizardState()
     importButton.setEnabled(!busy);
     dropHero.setInteractionEnabled(!busy);
     tapeSetupPanel.setInteractionEnabled(!busy);
-    processingOptionsPanel.setInteractionEnabled(!busy);
     tapeSetupPanel.setTapeTypeLocked(hasProcessed && !busy);
+    settingsButton.setEnabled(!busy);
     mixtapePanel.setBusy(busy);
 
     startButton.setVisible(!hasProcessed || busy);
     startButton.setEnabled(hasSource && !busy && !hasProcessed
                            && (!mixtapeModeActive || folderFitOk));
     trackListEditor.setInterceptsMouseClicks(showTrackEditor, showTrackEditor);
-    startButton.setButtonText("Prepare");
+    startButton.setButtonText(tr("btn.prepare"));
     newButton.setEnabled((hasSource || hasProcessed) && !busy);
     exportButton.setEnabled(!busy && hasProcessed && loadedAudio.has_value());
 
@@ -214,9 +228,8 @@ void MainComponent::updateWaveformInfo(const AudioFeatures& source, const AudioF
 MasteringOptions MainComponent::currentMasteringOptions() const
 {
     auto options = tapeSetup().getMasteringOptions();
-    const auto chain = processingOptionsPanel.getOptions();
-    options.enableTruePeakLimiter = chain.enableTruePeakLimiter;
-    options.enableStereoTightening = chain.enableStereoTightening;
+    options.enableTruePeakLimiter = processingChainOptions.enableTruePeakLimiter;
+    options.enableStereoTightening = processingChainOptions.enableStereoTightening;
     return options;
 }
 
@@ -278,12 +291,12 @@ void MainComponent::resized()
         rightSidebarBounds = {};
     auto centre = bounds;
 
-    auto left = leftSidebarBounds.reduced(16, 18);
-    newButton.setBounds(left.removeFromTop(36));
-    left.removeFromTop(10);
-    importButton.setBounds(left.removeFromTop(36));
-    left.removeFromTop(14);
-    processingOptionsPanel.setBounds(left.removeFromTop(68));
+    auto sidebar = leftSidebarBounds.reduced(16, 18);
+    settingsButton.setBounds(sidebar.removeFromBottom(36));
+
+    newButton.setBounds(sidebar.removeFromTop(36));
+    sidebar.removeFromTop(10);
+    importButton.setBounds(sidebar.removeFromTop(36));
 
     auto topBar = centre.removeFromTop(56).reduced(14, 12);
 
@@ -443,6 +456,7 @@ void MainComponent::resetSession()
     sideBAudio.reset();
     lastQuality.reset();
     lastProcessedFeatures.reset();
+    processingChainOptions = MasteringOptions {};
     loadedFile = juce::File();
     sideAPath = juce::File();
     sideBPath = juce::File();
@@ -480,8 +494,19 @@ void MainComponent::invalidatePreparedOutput()
     compareWaveform.clearAfter();
     readySummary.setVisible(false);
 
-    setStatus("Choose tape type, then Prepare", ui::Theme::textSecondary());
+    setStatus(tr("status.choose_tape_then_prepare"), ui::Theme::textSecondary());
     syncLayout();
+}
+
+void MainComponent::showProcessingSettings()
+{
+    ui::showAppSettingsDialog(this, processingChainOptions, [this](MasteringOptions options) {
+        const bool processingChanged = options.enableTruePeakLimiter != processingChainOptions.enableTruePeakLimiter
+                                       || options.enableStereoTightening != processingChainOptions.enableStereoTightening;
+        processingChainOptions = options;
+        if (processingChanged && hasProcessed)
+            invalidatePreparedOutput();
+    });
 }
 
 void MainComponent::promptChangeTapeType()
@@ -490,11 +515,10 @@ void MainComponent::promptChangeTapeType()
         return;
 
     ui::ConfirmDialogOptions options;
-    options.title = "Change tape type";
-    options.message = "Changing the tape type discards the prepared result.\n"
-                      "You will need to run Prepare again.";
-    options.confirmLabel = "Change type";
-    options.cancelLabel = "Keep current";
+    options.title = tr("dialog.change_tape.title");
+    options.message = tr("dialog.change_tape.message");
+    options.confirmLabel = tr("dialog.change_tape.confirm");
+    options.cancelLabel = tr("dialog.cancel");
 
     ui::showConfirmDialog(this, options, [this](bool confirmed) {
         if (confirmed)
@@ -518,7 +542,7 @@ void MainComponent::pickImportAudio()
                              if (AudioFileLoader::isSupportedAudioFile(picked))
                                  loadAudioFile(picked);
                              else
-                                 setStatus("Unsupported format (use " + AudioFileLoader::supportedFormatsLabel() + ")",
+                                 setStatus(trf("status.unsupported_format", AudioFileLoader::supportedFormatsLabel()),
                                            ui::Theme::warnAmber());
                          });
 }
@@ -569,7 +593,7 @@ void MainComponent::scanMixFolder(const juce::File& folder)
     mixtapePanel.setBusy(true);
     mixtapeModeActive = true;
     tapeSetupPanel.setMixtapeMode(true);
-    setStatus("Scanning " + folder.getFileName() + "...", ui::Theme::warnAmber());
+    setStatus(trf("status.scanning", folder.getFileName()), ui::Theme::warnAmber());
     syncLayout();
 
     worker.enqueue([this, folder]() {
@@ -618,14 +642,14 @@ void MainComponent::loadAudioFile(const juce::File& file)
     tapeSetupPanel.setMixtapeMode(false);
     compareWaveform.clearAfter();
     exportButton.setEnabled(false);
-    setStatus("Loading " + file.getFileName() + "...", ui::Theme::warnAmber());
+    setStatus(trf("status.loading", file.getFileName()), ui::Theme::warnAmber());
 
     worker.enqueue([this, file]() {
         const auto result = AudioFileLoader::loadToBufferWithDiagnostics(file);
         juce::MessageManager::callAsync([this, file, result]() {
             if (!result.audio.hasValue())
             {
-                setStatus("Load failed: " + result.error, ui::Theme::failRed());
+                setStatus(trf("status.load_failed", result.error), ui::Theme::failRed());
                 return;
             }
 
@@ -638,7 +662,7 @@ void MainComponent::loadAudioFile(const juce::File& file)
             const auto features = EssentiaAnalyzer::extractFeatures(loadedAudio->buffer, loadedAudio->sampleRate);
             updateWaveformInfo(features, nullptr);
 
-            setStatus("Added " + file.getFileName(), ui::Theme::okGreen());
+            setStatus(trf("status.added", file.getFileName()), ui::Theme::okGreen());
             syncLayout();
         });
     });
@@ -648,7 +672,7 @@ void MainComponent::startProcessing()
 {
     if (!loadedAudio.has_value())
     {
-        setStatus("Add music first", ui::Theme::warnAmber());
+        setStatus(tr("status.add_music_first"), ui::Theme::warnAmber());
         return;
     }
     if (isProcessing.load())
@@ -663,7 +687,7 @@ void MainComponent::startProcessing()
 
     auto audioCopy = *loadedAudio;
     setUiProcessing(true);
-    setStatus("Preparing for cassette...", ui::Theme::warnAmber());
+    setStatus(tr("status.preparing"), ui::Theme::warnAmber());
     wizardSteps.setPhase(WizardPhase::Preparing);
 
     worker.enqueue([this, audioCopy, profile, options, fileName]() mutable {
@@ -715,7 +739,7 @@ void MainComponent::startFolderMixBuild()
 {
     if (!folderScan.has_value() || !folderScan->success)
     {
-        setStatus("Pick a folder with tracks first", ui::Theme::warnAmber());
+        setStatus(tr("status.pick_folder"), ui::Theme::warnAmber());
         return;
     }
 
@@ -748,8 +772,8 @@ void MainComponent::startFolderMixBuild()
 
     setUiProcessing(true);
     wizardSteps.setPhase(WizardPhase::Preparing);
-    setStatus(cassetteCount > 1 ? "Preparing " + juce::String(cassetteCount) + " cassettes..."
-                                : "Preparing Side A and Side B...",
+    setStatus(cassetteCount > 1 ? trf("status.preparing_cassettes", cassetteCount)
+                                : tr("status.preparing_sides"),
               ui::Theme::warnAmber());
 
     log("UI: Build mixtape started - " + juce::String(scanCopy.tracks.size()) + " tracks, "
@@ -1030,7 +1054,7 @@ void MainComponent::exportWav()
 {
     if (!loadedAudio.has_value())
     {
-        setStatus("Prepare for cassette first", ui::Theme::warnAmber());
+        setStatus(tr("status.prepare_first"), ui::Theme::warnAmber());
         return;
     }
 
@@ -1064,11 +1088,11 @@ void MainComponent::exportWav()
                              if (WavExporter::writeWav32Float(out, exportBuffer, loadedAudio->sampleRate))
                              {
                                  wizardSteps.setStepDone(WizardPhase::ReadyToExport, true);
-                                 setStatus("Exported: " + out.getFileName(), ui::Theme::okGreen());
+                                 setStatus(trf("status.exported", out.getFileName()), ui::Theme::okGreen());
                                  updateWizardState();
                              }
                              else
-                                 setStatus("Export failed", ui::Theme::failRed());
+                                 setStatus(tr("status.export_failed"), ui::Theme::failRed());
                          });
 }
 
@@ -1095,7 +1119,7 @@ void MainComponent::handleAudioFilesDropped(const juce::StringArray& files, int,
     if (file.existsAsFile())
         loadAudioFile(file);
     else
-        setStatus("No supported audio in drop", ui::Theme::warnAmber());
+        setStatus(tr("status.unsupported_drop"), ui::Theme::warnAmber());
 }
 
 bool MainComponent::isInterestedInFileDrag(const juce::StringArray& files)
@@ -1137,6 +1161,11 @@ void MainComponent::buttonClicked(juce::Button* button)
     if (button == &importButton)
     {
         pickImportAudio();
+        return;
+    }
+    if (button == &settingsButton)
+    {
+        showProcessingSettings();
         return;
     }
     if (button == &startButton)

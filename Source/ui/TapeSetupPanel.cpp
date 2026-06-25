@@ -1,5 +1,6 @@
 #include "TapeSetupPanel.h"
 #include "UiTheme.h"
+#include "../util/AppLocale.h"
 
 namespace cassette
 {
@@ -44,6 +45,7 @@ TapeSetupPanel::TapeSetupPanel()
     {
         addAndMakeVisible(*b);
         b->setRadioGroupId(9100);
+        b->setComponentID("tape-type-segment");
         b->setClickingTogglesState(true);
         b->addListener(this);
     }
@@ -62,10 +64,10 @@ TapeSetupPanel::TapeSetupPanel()
         b->setClickingTogglesState(true);
         b->addListener(this);
     }
-    lengthBtnCustom.setTooltip("Custom length per side");
-    lengthBtnC60.setTooltip("C60 — 30 min per side");
-    lengthBtnC90.setTooltip("C90 — 45 min per side");
-    lengthBtnC120.setTooltip("C120 — 60 min per side");
+    lengthBtnCustom.setTooltip(tr("tape.tooltip.custom"));
+    lengthBtnC60.setTooltip(tr("tape.tooltip.c60"));
+    lengthBtnC90.setTooltip(tr("tape.tooltip.c90"));
+    lengthBtnC120.setTooltip(tr("tape.tooltip.c120"));
     lengthBtnC90.setToggleState(true, juce::dontSendNotification);
     refreshLengthSegmentStyles();
 
@@ -106,6 +108,25 @@ TapeSetupPanel::TapeSetupPanel()
     Theme::styleAccentButton(prepareButton);
     prepareButton.addListener(this);
     prepareButton.setEnabled(false);
+
+    refreshLocalisedText();
+}
+
+void TapeSetupPanel::refreshLocalisedText()
+{
+    typeBtnI.setButtonText(tr("tape.type_i"));
+    typeBtnII.setButtonText(tr("tape.type_ii"));
+    typeBtnIV.setButtonText(tr("tape.type_iv"));
+    lengthBtnCustom.setButtonText(tr("tape.custom"));
+    changeTypeButton.setButtonText(tr("btn.change"));
+    lengthBtnCustom.setTooltip(tr("tape.tooltip.custom"));
+    lengthBtnC60.setTooltip(tr("tape.tooltip.c60"));
+    lengthBtnC90.setTooltip(tr("tape.tooltip.c90"));
+    lengthBtnC120.setTooltip(tr("tape.tooltip.c120"));
+    if (!mainScreenMode)
+        prepareButton.setButtonText(mixtapeMode ? tr("tape.build_sides") : tr("tape.prepare_for_tape"));
+    refreshTypeSegmentStyles();
+    repaint();
 }
 
 TapeFormulation TapeSetupPanel::getTapeFormulation() const
@@ -209,7 +230,7 @@ void TapeSetupPanel::setMixtapeMode(bool mixtape)
     tapeFitLabel.setVisible(false);
     updateLengthControlPresentation();
     if (!mainScreenMode)
-        prepareButton.setButtonText(mixtape ? "Build Side A/B WAV" : "Prepare for Tape");
+        prepareButton.setButtonText(mixtape ? tr("tape.build_sides") : tr("tape.prepare_for_tape"));
     if (!mixtape)
         tapeFitLabel.setText({}, juce::dontSendNotification);
     resized();
@@ -401,12 +422,12 @@ void TapeSetupPanel::paint(juce::Graphics& g)
         return;
 
     auto header = getLocalBounds().reduced(14, 12);
-    ui::Theme::drawSectionLabel(g, header.removeFromTop(18), "Tape parameters");
+    ui::Theme::drawSectionLabel(g, header.removeFromTop(18), tr("tape.parameters"));
 
     if (mixtapeMode)
     {
         header.removeFromTop(32 + 10);
-        ui::Theme::drawSectionLabel(g, header.removeFromTop(18), "Cassette length");
+        ui::Theme::drawSectionLabel(g, header.removeFromTop(18), tr("tape.length"));
     }
 }
 
