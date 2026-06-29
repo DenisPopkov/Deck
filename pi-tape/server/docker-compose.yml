@@ -1,0 +1,18 @@
+services:
+  vsftpd:
+    image: fauria/vsftpd
+    ports:
+      - "2121:21"
+      - "30000-30009:30000-30009"
+    environment:
+      FTP_USER: tape
+      FTP_PASS: tape
+      PASV_ADDRESS: 127.0.0.1
+      PASV_MIN_PORT: 30000
+      PASV_MAX_PORT: 30009
+    volumes:
+      - tape_inbox:/home/vsftpd/tape/inbox
+    restart: unless-stopped
+
+volumes:
+  tape_inbox:

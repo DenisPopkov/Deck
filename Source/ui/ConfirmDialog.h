@@ -19,4 +19,9 @@ void showConfirmDialog(juce::Component* host,
                        const ConfirmDialogOptions& options,
                        std::function<void(bool confirmed)> onResult);
 
+/** Overlay confirm inside an existing modal (no nested enterModalState). */
+void attachConfirmOverlay(juce::Component& parent,
+                          const ConfirmDialogOptions& options,
+                          std::function<void(bool confirmed)> onResult);
+
 } // namespace cassette::ui

@@ -1,0 +1,9 @@
+{
+  "job_id": "2026-06-27T18:30:00Z_demo_side_a",
+  "remote_path": "inbox/Demo Side A.wav",
+  "side": "A",
+  "normalize": false,
+  "target_format": "wav44k16stereo",
+  "play_mode": "replace",
+  "start_mode": "manual"
+}

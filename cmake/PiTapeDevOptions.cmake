@@ -1,0 +1,3 @@
+# Local Pi tape dev build (separate build tree recommended: build-pi).
+# Usage: cmake -C cmake/PiTapeDevOptions.cmake -B build-pi ...
+set(CASSETTE_ENABLE_PI_TAPE ON CACHE BOOL "Private dev-only Pi FTP upload" FORCE)

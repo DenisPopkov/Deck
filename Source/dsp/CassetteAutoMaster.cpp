@@ -296,11 +296,18 @@ void applyRecordHfPreEmphasis(juce::AudioBuffer<float>& buffer,
     }
 }
 
+float clampMasteringGainDb(float gainDb)
+{
+    return juce::jlimit(-CassetteAutoMaster::kMaxMasteringGainDb,
+                        CassetteAutoMaster::kMaxMasteringGainDb,
+                        gainDb);
+}
+
 float computeGainDb(const CassetteProfile& profile,
                     const AudioFeatures& features,
                     const MasteringOptions& options)
 {
-    const float sourceLUFS = features.integratedLUFS;
+    const float sourceLUFS = EssentiaAnalyzer::sanitizeIntegratedLufs(features.integratedLUFS);
     const float capLUFS = profile.maxIntegratedLUFS;
     const float lufsGain = CassetteAutoMaster::calculateGainForTargetLUFS(sourceLUFS, capLUFS);
     const float peakGain = options.enableTruePeakLimiter
@@ -314,13 +321,13 @@ float computeGainDb(const CassetteProfile& profile,
                                  && features.truePeakDbfs > profile.truePeakCeilingDbfs + 0.05f;
 
         if (hotLufs && hotPeak)
-            return juce::jmax(lufsGain, peakGain);
+            return clampMasteringGainDb(juce::jmax(lufsGain, peakGain));
 
         if (hotLufs)
             return lufsGain;
 
         if (hotPeak)
-            return peakGain;
+            return clampMasteringGainDb(peakGain);
 
         return 0.0f;
     }
@@ -330,13 +337,13 @@ float computeGainDb(const CassetteProfile& profile,
                              && features.truePeakDbfs > profile.truePeakCeilingDbfs + 0.05f;
 
     if (hotLufs && hotPeak)
-        return juce::jmax(lufsGain, peakGain);
+        return clampMasteringGainDb(juce::jmax(lufsGain, peakGain));
 
     if (hotLufs)
         return lufsGain;
 
     if (hotPeak)
-        return peakGain;
+        return clampMasteringGainDb(peakGain);
 
     return 0.0f;
 }
@@ -352,7 +359,8 @@ void applyPostChainLoudnessTrim(juce::AudioBuffer<float>& buffer,
 
     const float target = profile.maxIntegratedLUFS;
 
-    const bool sourceNeededLevelTrim = sourceFeatures.integratedLUFS > target + 0.25f
+    const float sourceLufs = EssentiaAnalyzer::sanitizeIntegratedLufs(sourceFeatures.integratedLUFS);
+    const bool sourceNeededLevelTrim = sourceLufs > target + 0.25f
                                        || (options.enableTruePeakLimiter
                                            && sourceFeatures.truePeakDbfs > profile.truePeakCeilingDbfs + 0.05f);
 
@@ -422,12 +430,14 @@ void CassetteAutoMaster::prepare(double sr, int maxBlockSize)
 
 float CassetteAutoMaster::calculateGainForTargetLUFS(float currentLUFS, float targetLUFS)
 {
-    return targetLUFS - currentLUFS;
+    const float saneCurrent = EssentiaAnalyzer::sanitizeIntegratedLufs(currentLUFS);
+    const float saneTarget = EssentiaAnalyzer::sanitizeIntegratedLufs(targetLUFS);
+    return clampMasteringGainDb(saneTarget - saneCurrent);
 }
 
 void CassetteAutoMaster::applyGain(juce::AudioBuffer<float>& buffer, float gainDb)
 {
-    buffer.applyGain(juce::Decibels::decibelsToGain(gainDb));
+    buffer.applyGain(juce::Decibels::decibelsToGain(clampMasteringGainDb(gainDb)));
 }
 
 void CassetteAutoMaster::processTrack(juce::AudioBuffer<float>& buffer,

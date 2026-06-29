@@ -11,21 +11,6 @@ namespace cassette
 namespace
 {
 
-double readFileDurationSec(const juce::File& file)
-{
-    auto in = file.createInputStream();
-    if (in == nullptr)
-        return 0.0;
-
-    auto& fm = AudioFileLoader::getFormatManager();
-    std::unique_ptr<juce::AudioFormatReader> reader(
-        fm.createReaderFor(std::unique_ptr<juce::InputStream>(in.release())));
-    if (reader == nullptr)
-        return 0.0;
-
-    return static_cast<double>(reader->lengthInSamples) / reader->sampleRate;
-}
-
 bool isExportedSideWav(const juce::File& file)
 {
     const auto name = file.getFileName();
@@ -126,7 +111,7 @@ int endIndexForCassetteChunk(const FolderScanResult& scan, int beginIndex, doubl
 
 }
 
-TapeLengthSpec tapeLengthSpecForPreset(TapeLengthPreset preset, double customMinutesPerSide)
+TapeLengthSpec tapeLengthSpecForPreset(TapeLengthPreset preset, double customTotalMinutes)
 {
     switch (preset)
     {
@@ -134,9 +119,10 @@ TapeLengthSpec tapeLengthSpecForPreset(TapeLengthPreset preset, double customMin
         case TapeLengthPreset::C120: return { "C120", 60.0 };
         case TapeLengthPreset::Custom:
         {
-            const auto mins = juce::jmax(1.0, customMinutesPerSide);
-            const auto label = "Custom (" + juce::String(juce::roundToInt(mins)) + " min)";
-            return { label, mins };
+            const auto totalMins = juce::jmax(2.0, customTotalMinutes);
+            const auto perSideMins = totalMins * 0.5;
+            const auto label = "Custom (" + juce::String(juce::roundToInt(totalMins)) + " min)";
+            return { label, perSideMins };
         }
         case TapeLengthPreset::C90:
         default: return { "C90", 45.0 };
@@ -226,7 +212,7 @@ FolderScanResult FolderMixBuilder::scanFolder(const juce::File& folder, double g
         FolderTrackInfo info;
         info.file = f;
         info.displayName = f.getFileNameWithoutExtension();
-        info.durationSec = readFileDurationSec(f);
+        info.durationSec = AudioFileLoader::probeDurationSec(f);
         const double readMs = juce::Time::getMillisecondCounterHiRes() - t0;
 
         if (info.durationSec <= 0.0)

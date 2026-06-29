@@ -85,8 +85,8 @@ TapeSetupPanel::TapeSetupPanel()
     };
 
     addAndMakeVisible(customMinutesSlider);
-    customMinutesSlider.setRange(5.0, 120.0, 1.0);
-    customMinutesSlider.setValue(45.0, juce::dontSendNotification);
+    customMinutesSlider.setRange(20.0, 240.0, 2.0);
+    customMinutesSlider.setValue(90.0, juce::dontSendNotification);
     customMinutesSlider.setSliderStyle(juce::Slider::LinearHorizontal);
     customMinutesSlider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 84, 24);
     customMinutesSlider.textFromValueFunction = [](double value) {

@@ -151,6 +151,45 @@ private:
     ConfirmDialogPanel dialog;
 };
 
+class ConfirmOverlay : public juce::Component
+{
+public:
+    ConfirmOverlay(const ConfirmDialogOptions& options, std::function<void(bool)> onResultIn)
+        : dialog(options),
+          onResult(std::move(onResultIn))
+    {
+        dialog.onResult = [this](bool confirmed) {
+            if (onResult)
+                onResult(confirmed);
+            if (auto* p = getParentComponent())
+                p->removeChildComponent(this);
+            delete this;
+        };
+
+        addAndMakeVisible(dialog);
+        setWantsKeyboardFocus(true);
+    }
+
+    void paint(juce::Graphics& g) override
+    {
+        g.fillAll(juce::Colours::black.withAlpha(0.55f));
+    }
+
+    void resized() override
+    {
+        dialog.setBounds(getLocalBounds().withSizeKeepingCentre(dialog.getWidth(), dialog.getDialogHeight()));
+    }
+
+    bool keyPressed(const juce::KeyPress& key) override
+    {
+        return dialog.keyPressed(key) || juce::Component::keyPressed(key);
+    }
+
+private:
+    ConfirmDialogPanel dialog;
+    std::function<void(bool)> onResult;
+};
+
 } // namespace
 
 void showConfirmDialog(juce::Component* host,
@@ -174,6 +213,17 @@ void showConfirmDialog(juce::Component* host,
     modal->enterModalState(true,
                             juce::ModalCallbackFunction::create([modal](int) { delete modal; }),
                             true);
+}
+
+void attachConfirmOverlay(juce::Component& parent,
+                          const ConfirmDialogOptions& options,
+                          std::function<void(bool confirmed)> onResult)
+{
+    auto* overlay = new ConfirmOverlay(options, std::move(onResult));
+    parent.addAndMakeVisible(overlay);
+    overlay->setBounds(parent.getLocalBounds());
+    overlay->toFront(true);
+    overlay->grabKeyboardFocus();
 }
 
 } // namespace cassette::ui

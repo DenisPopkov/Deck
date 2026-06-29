@@ -102,7 +102,7 @@ make run
 ## Ручная сборка (без Makefile)
 
 ```bash
-cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCASSETTE_BUILD_TESTS=OFF
+cmake -C cmake/ProdOptions.cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCASSETTE_BUILD_TESTS=OFF
 cmake --build build --target Deck --parallel
 ```
 

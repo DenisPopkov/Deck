@@ -11,6 +11,8 @@ namespace cassette
 class CassetteAutoMaster
 {
 public:
+    static constexpr float kMaxMasteringGainDb = 24.0f;
+
     void prepare(double sampleRate, int maxBlockSize);
     void processTrack(juce::AudioBuffer<float>& buffer,
                       const CassetteProfile& profile,

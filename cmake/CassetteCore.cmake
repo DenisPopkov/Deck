@@ -38,6 +38,17 @@ set(CASSETTE_CORE_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/../Source/io/AudioResampler.cpp
 )
 
+if(CASSETTE_ENABLE_PI_TAPE)
+    list(APPEND CASSETTE_CORE_SOURCES
+        ${CMAKE_CURRENT_LIST_DIR}/../Source/io/FtpClient.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/../Source/io/PiTapeSettings.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/../Source/io/PiTapeUploader.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/../Source/io/PiTapeControlClient.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/../Source/io/PiTapeRemoteStatus.cpp
+        ${CMAKE_CURRENT_LIST_DIR}/../Source/io/PiTapeSessionState.cpp
+    )
+endif()
+
 function(cassette_configure_core_target target)
     target_include_directories(${target} PUBLIC
         ${CMAKE_CURRENT_LIST_DIR}/../Source

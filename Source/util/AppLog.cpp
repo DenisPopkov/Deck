@@ -1,4 +1,5 @@
 #include "AppLog.h"
+#include "io/PiTapeTrace.h"
 #include <juce_events/juce_events.h>
 #include <cstdio>
 
@@ -45,6 +46,8 @@ void initLogging()
     juce::Logger::setCurrentLogger(&logger);
     logFilePath().deleteFile();
     log("Deck logging started");
+    if (piTapeTraceEnabled())
+        log("Pi tape trace ON (DECK_PI_TRACE or terminal stdout) — timing lines prefixed [pi-tape]");
 }
 
 void log(const juce::String& message)

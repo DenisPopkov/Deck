@@ -12,11 +12,22 @@ LEGACY_APPS=(
   "/Applications/Cassette Auto Master.app"
   "/Applications/CassetteAutoMaster.app"
 )
+JOBS="$(sysctl -n hw.ncpu 2>/dev/null || echo 4)"
+
+echo "=== Production configure (Pi tape OFF) ==="
+cmake -C "$ROOT/cmake/ProdOptions.cmake" -B "$ROOT/build" \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCASSETTE_BUILD_TESTS=OFF
+
+echo "=== Build Deck ==="
+cmake --build "$ROOT/build" --config Release --target Deck -j"$JOBS"
 
 if [[ ! -d "$BUILD_APP" ]]; then
-  echo "Build first: cmake --build build --config Release --target Deck"
+  echo "Build failed: $BUILD_APP not found"
   exit 1
 fi
+
+bash "$ROOT/scripts/verify_prod_app.sh" "$BUILD_APP"
 
 bash "$ROOT/scripts/apply_app_icon.sh" "$BUILD_APP"
 
@@ -34,6 +45,8 @@ done
 rm -rf "$DEST"
 ditto "$BUILD_APP" "$DEST"
 touch "$DEST"
+
+bash "$ROOT/scripts/verify_prod_app.sh" "$DEST"
 
 xattr -cr "$DEST" 2>/dev/null || true
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$DEST" 2>/dev/null || true

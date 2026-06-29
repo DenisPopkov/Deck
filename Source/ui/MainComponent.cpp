@@ -12,6 +12,13 @@
 #include "../dsp/AudioConstants.h"
 #include "../io/DropPayload.h"
 #include "../util/AppLog.h"
+#include "../util/CassetteBuildFlags.h"
+#if CASSETTE_ENABLE_PI_TAPE
+#include "../io/PiTapeUploader.h"
+#include "../io/PiTapeControlClient.h"
+#include "../io/PiTapeSessionState.h"
+#include "PiTapeControlDialog.h"
+#endif
 #include "../util/AppLocale.h"
 
 namespace cassette
@@ -28,10 +35,12 @@ MainComponent::MainComponent()
                      static_cast<juce::Component*>(&compareWaveform),
                      static_cast<juce::Component*>(&trackListEditor),
                      static_cast<juce::Component*>(&newButton),
-                     static_cast<juce::Component*>(&importButton),
                      static_cast<juce::Component*>(&settingsButton),
                      static_cast<juce::Component*>(&startButton),
                      static_cast<juce::Component*>(&exportButton),
+#if CASSETTE_ENABLE_PI_TAPE
+                     static_cast<juce::Component*>(&sendToPiButton),
+#endif
                      static_cast<juce::Component*>(&status) })
         addAndMakeVisible(c);
 
@@ -46,7 +55,11 @@ MainComponent::MainComponent()
         {
             const bool editorActive = !mixtapeEditor.sideA().empty() || !mixtapeEditor.sideB().empty();
             if (editorActive)
+            {
                 mixtapeEditor.syncCassettePlan(tape);
+                if (mixtapeEditor.hasSideOverflow(tape) || !mixtapeEditor.canPrepare(tape))
+                    mixtapeEditor.rebalance(tape);
+            }
             trackListEditor.setTapeSpec(tape);
             trackListEditor.refresh();
         }
@@ -65,15 +78,24 @@ MainComponent::MainComponent()
 
     Theme::styleRecButton(startButton);
     Theme::styleExportButton(exportButton);
+#if CASSETTE_ENABLE_PI_TAPE
+    Theme::styleExportButton(sendToPiButton);
+#endif
     Theme::styleNeutralButton(newButton);
-    Theme::styleBlackButton(importButton);
     newButton.addListener(this);
-    importButton.addListener(this);
     startButton.addListener(this);
     exportButton.addListener(this);
+#if CASSETTE_ENABLE_PI_TAPE
+    sendToPiButton.addListener(this);
+#endif
     startButton.setEnabled(false);
     newButton.setEnabled(false);
     exportButton.setEnabled(false);
+#if CASSETTE_ENABLE_PI_TAPE
+    sendToPiButton.setEnabled(false);
+    piTapeSettings = PiTapeSettings::load();
+    maybeCleanupExpiredPiTapeInbox();
+#endif
 
     Theme::applyLabel(status, Theme::bodyFont(), Theme::textSecondary());
 
@@ -107,6 +129,9 @@ MainComponent::~MainComponent()
     stopTimer();
     trackListEditor.shutdownPreviewAudio();
     previewDeviceManager.closeAudioDevice();
+#if CASSETTE_ENABLE_PI_TAPE
+    cleanupPiTapeInboxOnExit();
+#endif
 }
 
 TapeSetupPanel& MainComponent::tapeSetup() { return tapeSetupPanel; }
@@ -122,10 +147,12 @@ void MainComponent::setStatus(const juce::String& text, juce::Colour colour)
 void MainComponent::refreshUiText()
 {
     newButton.setButtonText(tr("btn.new"));
-    importButton.setButtonText(tr("btn.import_audio"));
     settingsButton.setButtonText(tr("btn.settings"));
     startButton.setButtonText(tr("btn.prepare"));
     exportButton.setButtonText(tr("btn.export_wav"));
+#if CASSETTE_ENABLE_PI_TAPE
+    sendToPiButton.setButtonText(tr("btn.pi_tape"));
+#endif
     tapeSetupPanel.refreshLocalisedText();
     dropHero.refreshLocalisedText();
     trackListEditor.refreshLocalisedText();
@@ -137,17 +164,25 @@ void MainComponent::syncTransportButtonStyles()
 {
     using ui::Theme;
 
-    Theme::applyTransportButtonStyle(newButton, Theme::TransportButtonStyle::Neutral, newButton.isEnabled());
-    Theme::applyTransportButtonStyle(importButton, Theme::TransportButtonStyle::Black, importButton.isEnabled());
+    const bool newLooksActive = newButton.isEnabled() && (hasSource || hasProcessed);
+    Theme::applyTransportButtonStyle(newButton,
+                                     newLooksActive ? Theme::TransportButtonStyle::Black
+                                                    : Theme::TransportButtonStyle::Neutral,
+                                     newButton.isEnabled());
     Theme::applyTransportButtonStyle(settingsButton, Theme::TransportButtonStyle::Neutral, settingsButton.isEnabled());
     Theme::applyTransportButtonStyle(startButton, Theme::TransportButtonStyle::Rec, startButton.isEnabled());
     Theme::applyTransportButtonStyle(exportButton, Theme::TransportButtonStyle::Export, exportButton.isEnabled());
+#if CASSETTE_ENABLE_PI_TAPE
+    Theme::applyTransportButtonStyle(sendToPiButton, Theme::TransportButtonStyle::Export, sendToPiButton.isEnabled());
+#endif
 
     newButton.repaint();
-    importButton.repaint();
     settingsButton.repaint();
     startButton.repaint();
     exportButton.repaint();
+#if CASSETTE_ENABLE_PI_TAPE
+    sendToPiButton.repaint();
+#endif
 }
 
 void MainComponent::updateWizardState()
@@ -177,7 +212,6 @@ void MainComponent::updateWizardState()
     tapeSetupPanel.setMixtapeMode(mixtapeModeActive);
     tapeSetupPanel.setCompactToolbarMode(!mixtapeModeActive);
 
-    importButton.setEnabled(!busy);
     dropHero.setInteractionEnabled(!busy);
     tapeSetupPanel.setInteractionEnabled(!busy);
     tapeSetupPanel.setTapeTypeLocked(hasProcessed && !busy);
@@ -191,6 +225,10 @@ void MainComponent::updateWizardState()
     startButton.setButtonText(tr("btn.prepare"));
     newButton.setEnabled((hasSource || hasProcessed) && !busy);
     exportButton.setEnabled(!busy && hasProcessed && loadedAudio.has_value());
+#if CASSETTE_ENABLE_PI_TAPE
+    sendToPiButton.setEnabled(!busy && hasProcessed && loadedAudio.has_value() && piTapeSettings.enabled
+                                && piTapeSettings.isConfigured());
+#endif
 
     syncTransportButtonStyles();
 }
@@ -295,8 +333,6 @@ void MainComponent::resized()
     settingsButton.setBounds(sidebar.removeFromBottom(36));
 
     newButton.setBounds(sidebar.removeFromTop(36));
-    sidebar.removeFromTop(10);
-    importButton.setBounds(sidebar.removeFromTop(36));
 
     auto topBar = centre.removeFromTop(56).reduced(14, 12);
 
@@ -309,6 +345,10 @@ void MainComponent::resized()
 
     startButton.setBounds(topBar.removeFromLeft(112));
     topBar.removeFromLeft(10);
+#if CASSETTE_ENABLE_PI_TAPE
+    sendToPiButton.setBounds(topBar.removeFromRight(108));
+    topBar.removeFromRight(8);
+#endif
     exportButton.setBounds(topBar.removeFromRight(124));
 
     if (kRightSidebarW > 0)
@@ -371,7 +411,7 @@ bool MainComponent::keyPressed(const juce::KeyPress& key)
     }
     if (mods.isCommandDown() && key.getKeyCode() == 'O')
     {
-        pickImportAudio();
+        pickImportFolder();
         return true;
     }
     if (mods.isCommandDown() && key.getKeyCode() == juce::KeyPress::returnKey)
@@ -500,6 +540,24 @@ void MainComponent::invalidatePreparedOutput()
 
 void MainComponent::showProcessingSettings()
 {
+#if CASSETTE_ENABLE_PI_TAPE
+    ui::AppSettingsState state;
+    state.mastering = processingChainOptions;
+    state.piTape = piTapeSettings;
+
+    ui::showAppSettingsDialog(this, state, [this](ui::AppSettingsState updated) {
+        const bool processingChanged = updated.mastering.enableTruePeakLimiter != processingChainOptions.enableTruePeakLimiter
+                                         || updated.mastering.enableStereoTightening
+                                                != processingChainOptions.enableStereoTightening;
+        processingChainOptions = updated.mastering;
+        piTapeSettings = updated.piTape;
+        piTapeSettings.save();
+        updateWizardState();
+
+        if (processingChanged && hasProcessed)
+            invalidatePreparedOutput();
+    });
+#else
     ui::showAppSettingsDialog(this, processingChainOptions, [this](MasteringOptions options) {
         const bool processingChanged = options.enableTruePeakLimiter != processingChainOptions.enableTruePeakLimiter
                                        || options.enableStereoTightening != processingChainOptions.enableStereoTightening;
@@ -507,6 +565,7 @@ void MainComponent::showProcessingSettings()
         if (processingChanged && hasProcessed)
             invalidatePreparedOutput();
     });
+#endif
 }
 
 void MainComponent::promptChangeTapeType()
@@ -524,27 +583,6 @@ void MainComponent::promptChangeTapeType()
         if (confirmed)
             invalidatePreparedOutput();
     });
-}
-
-void MainComponent::pickImportAudio()
-{
-    auto chooser = std::make_shared<juce::FileChooser>(
-        "Import audio",
-        juce::File::getSpecialLocation(juce::File::userMusicDirectory),
-        AudioFileLoader::importFileWildcard());
-
-    chooser->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
-                         [this, chooser](const juce::FileChooser& fc) {
-                             const auto picked = fc.getResult();
-                             if (picked == juce::File())
-                                 return;
-
-                             if (AudioFileLoader::isSupportedAudioFile(picked))
-                                 loadAudioFile(picked);
-                             else
-                                 setStatus(trf("status.unsupported_format", AudioFileLoader::supportedFormatsLabel()),
-                                           ui::Theme::warnAmber());
-                         });
 }
 
 void MainComponent::pickImportFolder()
@@ -834,8 +872,8 @@ void MainComponent::startFolderMixBuild()
                                                        ? projectName + " Cassette " + juce::String(cassetteIdx + 1)
                                                        : projectName;
 
-                const auto sideAProgress = [&, start = trackOffset](int index, int, const juce::String& title) {
-                    trackProgress(start + index + 1, totalTracks, title);
+                const auto sideAProgress = [&, start = trackOffset](int finishedOnSide, int, const juce::String& title) {
+                    trackProgress(start + finishedOnSide, totalTracks, title);
                 };
 
                 const bool captureReference = previewA == nullptr;
@@ -864,8 +902,10 @@ void MainComponent::startFolderMixBuild()
 
                 if (sideBTracks > 0)
                 {
-                    const auto sideBProgress = [&, start = trackOffset + sideATracks](int index, int, const juce::String& title) {
-                        trackProgress(start + index + 1, totalTracks, title);
+                    const auto sideBProgress = [&, start = trackOffset + sideATracks](int finishedOnSide,
+                                                                                      int,
+                                                                                      const juce::String& title) {
+                        trackProgress(start + finishedOnSide, totalTracks, title);
                     };
 
                     auto renderedB = SideRenderer::renderSide(project, true, sampleRate, false, sideBProgress);
@@ -1050,6 +1090,77 @@ bool MainComponent::isInterestedInDrop(const juce::StringArray& files) const
     return isDropPayloadInterested(files);
 }
 
+#if CASSETTE_ENABLE_PI_TAPE
+
+void MainComponent::maybeCleanupExpiredPiTapeInbox()
+{
+    if (!piTapeSettings.enabled || !piTapeSettings.isConfigured())
+        return;
+
+    const auto session = PiTapeSessionState::load();
+    if (!session.hasActiveSession() || !session.isExpired())
+        return;
+
+    const auto settings = piTapeSettings;
+    worker.enqueue([settings]() {
+        PiTapeControlClient client;
+        client.cleanupSession(settings);
+        PiTapeSessionState::clearPersisted();
+    });
+}
+
+void MainComponent::cleanupPiTapeInboxOnExit()
+{
+    if (!piTapeSettings.enabled || !piTapeSettings.isConfigured())
+        return;
+
+    const auto session = PiTapeSessionState::load();
+    if (!session.hasActiveSession())
+        return;
+
+    PiTapeControlClient().cleanupSession(piTapeSettings);
+    PiTapeSessionState::clearPersisted();
+}
+
+void MainComponent::showPiTapeControl()
+{
+    if (!loadedAudio.has_value())
+    {
+        setStatus(tr("status.prepare_first"), ui::Theme::warnAmber());
+        return;
+    }
+
+    if (!piTapeSettings.enabled || !piTapeSettings.isConfigured())
+    {
+        setStatus(tr("status.pi_tape.configure"), ui::Theme::warnAmber());
+        showProcessingSettings();
+        return;
+    }
+
+    ui::PiTapeControlSession session;
+    session.settings = piTapeSettings;
+
+    if (mixtapeModeActive && sideAPath.existsAsFile())
+    {
+        session.queue.sideA = sideAPath;
+        session.queue.hasSideB = hasSideB && sideBPath.existsAsFile();
+        if (session.queue.hasSideB)
+            session.queue.sideB = sideBPath;
+        session.queue.projectName = folderScan.has_value() ? folderScan->folder.getFileName()
+                                                           : loadedFile.getFileNameWithoutExtension();
+    }
+    else
+    {
+        session.queue.sideA = loadedFile;
+        session.queue.hasSideB = false;
+        session.queue.projectName = loadedFile.getFileNameWithoutExtension();
+    }
+
+    ui::showPiTapeControlDialog(this, worker, std::move(session));
+}
+
+#endif
+
 void MainComponent::exportWav()
 {
     if (!loadedAudio.has_value())
@@ -1158,11 +1269,6 @@ void MainComponent::buttonClicked(juce::Button* button)
         resetSession();
         return;
     }
-    if (button == &importButton)
-    {
-        pickImportAudio();
-        return;
-    }
     if (button == &settingsButton)
     {
         showProcessingSettings();
@@ -1181,6 +1287,13 @@ void MainComponent::buttonClicked(juce::Button* button)
         exportWav();
         return;
     }
+#if CASSETTE_ENABLE_PI_TAPE
+    if (button == &sendToPiButton)
+    {
+        showPiTapeControl();
+        return;
+    }
+#endif
 }
 
 }

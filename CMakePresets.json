@@ -1,0 +1,59 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 22,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "prod",
+      "displayName": "Production (Pi tape OFF)",
+      "description": "Release build without Raspberry Pi tape integration",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CASSETTE_BUILD_TESTS": "OFF",
+        "CASSETTE_ENABLE_PI_TAPE": "OFF"
+      }
+    },
+    {
+      "name": "prod-tests",
+      "displayName": "Production + tests",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CASSETTE_BUILD_TESTS": "ON",
+        "CASSETTE_ENABLE_PI_TAPE": "OFF"
+      }
+    },
+    {
+      "name": "pi-dev",
+      "displayName": "Pi tape dev (local only)",
+      "description": "Private Raspberry Pi FTP upload build — not for release",
+      "binaryDir": "${sourceDir}/build-pi",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CASSETTE_BUILD_TESTS": "ON",
+        "CASSETTE_ENABLE_PI_TAPE": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "prod-deck",
+      "configurePreset": "prod",
+      "targets": ["Deck"]
+    },
+    {
+      "name": "prod-tests",
+      "configurePreset": "prod-tests",
+      "targets": ["DeckTests"]
+    },
+    {
+      "name": "pi-dev-deck",
+      "configurePreset": "pi-dev",
+      "targets": ["Deck"]
+    }
+  ]
+}

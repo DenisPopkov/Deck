@@ -9,6 +9,12 @@ namespace cassette
 class EssentiaAnalyzer
 {
 public:
+    static constexpr float kMinIntegratedLufs = -40.0f;
+    static constexpr float kMaxIntegratedLufs = 5.0f;
+
+    /** Clamps corrupt/non-finite LUFS readings before display and mastering. */
+    static float sanitizeIntegratedLufs(float lufs);
+
     static AudioFeatures extractFeatures(const juce::AudioBuffer<float>& buffer, double sampleRate);
     static AudioFeatures extractFeaturesForMastering(const juce::AudioBuffer<float>& buffer, double sampleRate);
     static juce::AudioBuffer<float> excerpt(const juce::AudioBuffer<float>& buffer,

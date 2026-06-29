@@ -22,7 +22,7 @@ else
 fi
 
 echo "=== Configure ==="
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DCASSETTE_BUILD_TESTS=ON
+cmake -C cmake/ProdOptions.cmake -B build -DCMAKE_BUILD_TYPE=Release -DCASSETTE_BUILD_TESTS=ON
 
 echo ""
 echo "=== Build DeckTests ==="

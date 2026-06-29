@@ -13,6 +13,24 @@ option(CASSETTE_BUILD_TESTS "Build mastering adequacy tests" ON)
 option(CASSETTE_BUILD_PLUGIN "Build VST3/AU Cassette Tape Prep plugin" OFF)
 option(CASSETTE_BUILD_BURNER "Build CassetteBurner timeline app" OFF)
 option(CASSETTE_SKIP_APP_ICON "Skip squircle icon post-processing (CI/minimal builds)" OFF)
+option(CASSETTE_ENABLE_PI_TAPE "Private dev-only Pi FTP upload (never enable in release CI)" OFF)
+
+if(DEFINED ENV{CI} AND CASSETTE_ENABLE_PI_TAPE)
+    message(FATAL_ERROR
+        "CASSETTE_ENABLE_PI_TAPE must remain OFF in CI/release builds. "
+        "Use cmake --preset pi-dev or -DCASSETTE_ENABLE_PI_TAPE=ON in a separate build-pi tree only.")
+endif()
+
+if(CASSETTE_ENABLE_PI_TAPE)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/cmake/LocalPiTape.cmake")
+        include(cmake/LocalPiTape.cmake)
+        message(STATUS "Loaded local Pi tape settings: cmake/LocalPiTape.cmake")
+    endif()
+    message(STATUS "Pi tape FTP upload: ENABLED (dev-only build)")
+else()
+    set(CASSETTE_ENABLE_PI_TAPE OFF CACHE BOOL "Private dev-only Pi FTP upload" FORCE)
+    message(STATUS "Pi tape FTP upload: disabled (production default)")
+endif()
 
 include(FetchContent)
 
@@ -33,6 +51,12 @@ include(cmake/OptionalDeps.cmake)
 
 add_library(cassette_core STATIC ${CASSETTE_CORE_SOURCES})
 cassette_configure_core_target(cassette_core)
+
+if(CASSETTE_ENABLE_PI_TAPE)
+    target_compile_definitions(cassette_core PUBLIC CASSETTE_ENABLE_PI_TAPE=1)
+else()
+    target_compile_definitions(cassette_core PUBLIC CASSETTE_ENABLE_PI_TAPE=0)
+endif()
 
 if(CASSETTE_BUILD_ONNX)
     cassette_find_onnxruntime(CASSETTE_ONNX_FOUND)
@@ -106,6 +130,19 @@ target_compile_definitions(Deck PRIVATE
     JUCE_DISPLAY_SPLASH_SCREEN=0
     JUCE_MODAL_LOOPS_PERMITTED=1
 )
+
+if(CASSETTE_ENABLE_PI_TAPE)
+    target_compile_definitions(Deck PRIVATE CASSETTE_ENABLE_PI_TAPE=1)
+else()
+    target_compile_definitions(Deck PRIVATE CASSETTE_ENABLE_PI_TAPE=0)
+endif()
+
+if(CASSETTE_ENABLE_PI_TAPE)
+    target_sources(Deck PRIVATE
+        Source/ui/PiTapeSettingsPanel.cpp
+        Source/ui/PiTapeControlDialog.cpp
+    )
+endif()
 
 target_link_libraries(Deck PRIVATE
     cassette_core
@@ -228,6 +265,31 @@ if(CASSETTE_BUILD_TESTS)
     add_executable(CassetteRenderCompare Tools/RenderCompare.cpp)
     cassette_configure_core_target(CassetteRenderCompare)
     target_link_libraries(CassetteRenderCompare PRIVATE cassette_core)
+
+    if(CASSETTE_ENABLE_PI_TAPE)
+        add_executable(PiTapeUploadTest Tools/PiTapeUploadTest.cpp)
+        cassette_configure_core_target(PiTapeUploadTest)
+        target_sources(PiTapeUploadTest PRIVATE Tests/TestAppLogStub.cpp)
+        target_link_libraries(PiTapeUploadTest PRIVATE cassette_core)
+
+        add_executable(PiTapeFlowTest Tools/PiTapeFlowTest.cpp)
+        cassette_configure_core_target(PiTapeFlowTest)
+        target_sources(PiTapeFlowTest PRIVATE Tests/TestAppLogStub.cpp)
+        target_link_libraries(PiTapeFlowTest PRIVATE cassette_core)
+
+        set(PI_TAPE_SIDE_A "${CMAKE_SOURCE_DIR}/Tests/Fixtures/Charli-XCX-SS26-Rock-Music.fixture.flac")
+        if(NOT EXISTS "${PI_TAPE_SIDE_A}")
+            set(PI_TAPE_SIDE_A "$ENV{HOME}/Downloads/1-Charli-XCX-SS26-MHSFC1.flac")
+        endif()
+        if(EXISTS "${PI_TAPE_SIDE_A}")
+            add_test(NAME PiTapeUploadIntegration
+                     COMMAND PiTapeUploadTest --host 192.168.1.119 --side-a "${PI_TAPE_SIDE_A}")
+            set_tests_properties(PiTapeUploadIntegration PROPERTIES
+                ENVIRONMENT "PI_TAPE_HOST=192.168.1.119"
+                TIMEOUT 120
+                LABELS "integration;pi-tape")
+        endif()
+    endif()
 
     set(EXPORT_ORIGINAL "${CMAKE_SOURCE_DIR}/../Experiment/Digital Master.flac")
     set(EXPORT_MASTERED "${CMAKE_SOURCE_DIR}/../Experiment/Digital Master_cassette.wav")

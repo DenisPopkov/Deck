@@ -70,6 +70,7 @@ void TrackListEditor::TrackPreviewPlayback::attach(juce::AudioDeviceManager& dev
     deviceManager = &deviceManagerIn;
     player.setSource(this);
     deviceManager->addAudioCallback(&player);
+    prepareForOutput();
 }
 
 void TrackListEditor::TrackPreviewPlayback::shutdown()
@@ -99,6 +100,9 @@ bool TrackListEditor::TrackPreviewPlayback::loadFile(const juce::File& file)
     transport.setSource(nullptr);
     readerSource.reset();
 
+    if (!AudioFileLoader::isSupportedAudioFile(file))
+        return false;
+
     auto* reader = AudioFileLoader::getFormatManager().createReaderFor(file);
     if (reader == nullptr)
         return false;
@@ -106,11 +110,22 @@ bool TrackListEditor::TrackPreviewPlayback::loadFile(const juce::File& file)
     readerSource = std::make_unique<juce::AudioFormatReaderSource>(reader, true);
     transport.setSource(readerSource.get(), 0, nullptr, reader->sampleRate);
     trackName = file.getFileNameWithoutExtension();
+    prepareForOutput();
     return true;
+}
+
+void TrackListEditor::TrackPreviewPlayback::prepareForOutput()
+{
+    if (deviceManager == nullptr)
+        return;
+
+    if (auto* device = deviceManager->getCurrentAudioDevice())
+        prepareToPlay(device->getCurrentBufferSizeSamples(), device->getCurrentSampleRate());
 }
 
 void TrackListEditor::TrackPreviewPlayback::play()
 {
+    prepareForOutput();
     transport.start();
 }
 
@@ -333,9 +348,9 @@ int TrackListEditor::SideList::getTrackCount() const
                           : static_cast<int>(owner.controller->sideB().size());
 }
 
-int TrackListEditor::SideList::getContentHeight() const
+int TrackListEditor::SideList::getContentHeight(int minimumHeight) const
 {
-    return juce::jmax(getHeight(), 8 + getTrackCount() * kRowH);
+    return juce::jmax(minimumHeight, 8 + getTrackCount() * kRowH);
 }
 
 int TrackListEditor::SideList::rowAtY(int y) const
@@ -568,13 +583,6 @@ void TrackListEditor::SideList::paint(juce::Graphics& g)
                    getWidth() - 2 * TrackListEditor::kSideListInset,
                    2);
     }
-
-    if (count == 0)
-    {
-        g.setColour(Theme::textMuted());
-        g.setFont(Theme::captionFont());
-        g.drawText("Drop tracks here", getLocalBounds(), juce::Justification::centred);
-    }
 }
 
 void TrackListEditor::SideList::showContextMenu(int row)
@@ -636,12 +644,6 @@ void TrackListEditor::SideList::mouseDown(const juce::MouseEvent& e)
         return;
     }
 
-    if (isCheckboxHit(e.getPosition(), row))
-    {
-        toggleChecked(row);
-        return;
-    }
-
     selectedRow = row;
     pendingDragRow = row;
     pendingDrag = true;
@@ -699,8 +701,13 @@ void TrackListEditor::SideList::mouseUp(const juce::MouseEvent& e)
     if (pendingDrag && !dragging)
     {
         pendingDrag = false;
-        if (owner.controller != nullptr && !owner.selectionMode)
-            owner.playTrack(sideIndex, pendingDragRow);
+        if (owner.controller != nullptr)
+        {
+            if (owner.selectionMode)
+                toggleChecked(pendingDragRow);
+            else
+                owner.playTrack(sideIndex, pendingDragRow);
+        }
         return;
     }
 
@@ -790,7 +797,8 @@ void TrackListEditor::SideList::refresh()
     else if (selectedRow >= 0)
         selectedRow = juce::jlimit(0, count - 1, selectedRow);
 
-    setSize(getWidth(), getContentHeight());
+    const auto& viewport = sideIndex == 0 ? owner.sideAViewport : owner.sideBViewport;
+    setSize(getWidth(), getContentHeight(viewport.getHeight()));
     owner.updateDeleteButtonState();
     repaint();
 }
@@ -823,6 +831,7 @@ TrackListEditor::TrackListEditor()
     addAndMakeVisible(sideAViewport);
     addAndMakeVisible(sideBViewport);
     addAndMakeVisible(selectTracksButton);
+    addAndMakeVisible(rebalanceSidesButton);
     addAndMakeVisible(deleteSelectedButton);
     addChildComponent(miniPlayer);
     addChildComponent(trashZone);
@@ -846,11 +855,14 @@ TrackListEditor::TrackListEditor()
     loadingLabel.setText(tr("track.loading"), juce::dontSendNotification);
 
     Theme::styleNeutralButton(selectTracksButton);
+    Theme::styleNeutralButton(rebalanceSidesButton);
     Theme::styleNeutralButton(deleteSelectedButton);
     deleteSelectedButton.setVisible(false);
     deleteSelectedButton.setEnabled(false);
 
     selectTracksButton.onClick = [this] { setSelectionMode(!selectionMode); };
+
+    rebalanceSidesButton.onClick = [this] { rebalanceSides(); };
 
     deleteSelectedButton.onClick = [this] { confirmAndDeleteSelected(); };
 
@@ -910,7 +922,10 @@ void TrackListEditor::mouseExit(const juce::MouseEvent& e)
 void TrackListEditor::ensureAudioReady()
 {
     if (previewPlayback.isAttached())
+    {
+        previewPlayback.prepareForOutput();
         return;
+    }
 
     if (ownedDeviceManager.getCurrentAudioDevice() == nullptr)
     {
@@ -954,6 +969,8 @@ void TrackListEditor::setLoading(bool loadingIn)
     sideAViewport.setVisible(showEditor);
     sideBViewport.setVisible(showEditor);
     selectTracksButton.setEnabled(showEditor);
+    rebalanceSidesButton.setEnabled(showEditor && controller != nullptr
+                                    && (!controller->sideA().empty() || !controller->sideB().empty()));
     deleteSelectedButton.setEnabled(showEditor && selectionMode && totalCheckedCount() > 0);
     cassetteSelector.setEnabled(showEditor);
     miniPlayer.setVisible(showEditor && miniPlayerVisible);
@@ -965,6 +982,7 @@ void TrackListEditor::refreshLocalisedText()
 {
     loadingLabel.setText(tr("track.loading"), juce::dontSendNotification);
     selectTracksButton.setButtonText(selectionMode ? tr("btn.done") : tr("btn.select_tracks"));
+    rebalanceSidesButton.setButtonText(tr("btn.rebalance_sides"));
     updateDeleteButtonState();
     refresh();
 }
@@ -979,6 +997,19 @@ void TrackListEditor::setTapeSpec(const TapeLengthSpec& tapeIn)
 {
     tape = tapeIn;
     refresh();
+}
+
+void TrackListEditor::rebalanceSides()
+{
+    if (controller == nullptr || loading)
+        return;
+
+    if (controller->sideA().empty() && controller->sideB().empty())
+        return;
+
+    resetPlaybackAfterTrackLayoutChange();
+    controller->rebalance(tape);
+    layoutChanged();
 }
 
 void TrackListEditor::setDragActive(bool active)
@@ -1274,6 +1305,8 @@ void TrackListEditor::refresh()
 
     sideAList.refresh();
     sideBList.refresh();
+    rebalanceSidesButton.setEnabled(!loading && controller != nullptr
+                                    && (!controller->sideA().empty() || !controller->sideB().empty()));
     validatePlaybackState();
     resized();
 }
@@ -1302,6 +1335,7 @@ void TrackListEditor::resized()
 
     auto footer = area.removeFromBottom(kFooterH);
     selectTracksButton.setBounds(footer.removeFromLeft(130).reduced(0, 6));
+    rebalanceSidesButton.setBounds(footer.removeFromLeft(156).reduced(0, 6));
     if (selectionMode)
         deleteSelectedButton.setBounds(footer.removeFromLeft(180).reduced(0, 6));
 
@@ -1325,10 +1359,11 @@ void TrackListEditor::resized()
                          header.getHeight());
     area.removeFromTop(4);
 
-    sideAViewport.setBounds(area.getX(), area.getY(), colW, area.getHeight());
-    sideBViewport.setBounds(area.getX() + colW + gap, area.getY(), colW, area.getHeight());
-    sideAList.setSize(colW, sideAList.getContentHeight());
-    sideBList.setSize(colW, sideBList.getContentHeight());
+    const int listH = area.getHeight();
+    sideAViewport.setBounds(area.getX(), area.getY(), colW, listH);
+    sideBViewport.setBounds(area.getX() + colW + gap, area.getY(), colW, listH);
+    sideAList.setSize(colW, sideAList.getContentHeight(listH));
+    sideBList.setSize(colW, sideBList.getContentHeight(listH));
 }
 
 void TrackListEditor::paint(juce::Graphics& g)

@@ -46,6 +46,14 @@ float EssentiaAnalyzer::lufsFromMeanSquare(double meanSquare)
     return -0.691f + 10.0f * static_cast<float>(std::log10(meanSquare + static_cast<double>(kEps)));
 }
 
+float EssentiaAnalyzer::sanitizeIntegratedLufs(float lufs)
+{
+    if (!std::isfinite(lufs))
+        return -14.0f;
+
+    return juce::jlimit(kMinIntegratedLufs, kMaxIntegratedLufs, lufs);
+}
+
 AudioFeatures EssentiaAnalyzer::extractFeatures(const juce::AudioBuffer<float>& buffer, double sampleRate)
 {
     AudioFeatures f;
@@ -132,9 +140,9 @@ AudioFeatures EssentiaAnalyzer::extractFeaturesForMastering(const juce::AudioBuf
 float EssentiaAnalyzer::estimateIntegratedLufs(const juce::AudioBuffer<float>& buffer, double sampleRate)
 {
     if (const auto essentiaLufs = EssentiaBridge::integratedLufs(buffer, sampleRate))
-        return *essentiaLufs;
+        return sanitizeIntegratedLufs(*essentiaLufs);
 
-    return LoudnessMeter::analyze(buffer, sampleRate).integratedLufs;
+    return sanitizeIntegratedLufs(LoudnessMeter::analyze(buffer, sampleRate).integratedLufs);
 }
 
 void EssentiaAnalyzer::estimateShortTermLoudness(const juce::AudioBuffer<float>& buffer,

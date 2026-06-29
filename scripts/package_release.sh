@@ -13,7 +13,7 @@ if [[ ! -f Assets/AppIcon.png ]]; then
 fi
 
 echo "=== macOS Release ==="
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DCASSETTE_BUILD_TESTS=ON
+cmake -C cmake/ProdOptions.cmake -B build -DCMAKE_BUILD_TYPE=Release -DCASSETTE_BUILD_TESTS=ON
 cmake --build build --config Release --target Deck DeckTests -j"$(sysctl -n hw.ncpu 2>/dev/null || echo 4)"
 ctest --test-dir build --output-on-failure
 

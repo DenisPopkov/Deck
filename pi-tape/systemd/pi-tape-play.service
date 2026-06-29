@@ -1,0 +1,16 @@
+[Unit]
+Description=Fetch and play one tape job from FTP inbox
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=audio
+Environment=PI_TAPE_CONFIG=/etc/pi-tape/config.env
+ExecStart=/usr/local/bin/pi-tape-play.sh
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

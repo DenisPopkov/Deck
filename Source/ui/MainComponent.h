@@ -18,6 +18,10 @@
 #include "ProcessingSettingsDialog.h"
 #include "TrackListEditor.h"
 #include "../analysis/PerceptualQualityGuard.h"
+#include "../util/CassetteBuildFlags.h"
+#if CASSETTE_ENABLE_PI_TAPE
+#include "../io/PiTapeSettings.h"
+#endif
 
 namespace cassette
 {
@@ -57,7 +61,11 @@ private:
     void scanMixFolder(const juce::File& folder);
     void refreshFolderFitLabel();
     void exportWav();
-    void pickImportAudio();
+#if CASSETTE_ENABLE_PI_TAPE
+    void showPiTapeControl();
+    void maybeCleanupExpiredPiTapeInbox();
+    void cleanupPiTapeInboxOnExit();
+#endif
     void pickImportFolder();
     void resetSession();
     void invalidatePreparedOutput();
@@ -87,10 +95,12 @@ private:
     juce::Label readySummary { {}, "" };
 
     juce::TextButton newButton { "New" };
-    juce::TextButton importButton { "Import audio" };
     juce::TextButton settingsButton { "Settings" };
     juce::TextButton startButton { "Prepare" };
     juce::TextButton exportButton { "Export WAV" };
+#if CASSETTE_ENABLE_PI_TAPE
+    juce::TextButton sendToPiButton { "Pi Tape" };
+#endif
 
     CompareWaveformDisplay compareWaveform;
     juce::AudioDeviceManager previewDeviceManager;
@@ -121,6 +131,9 @@ private:
     std::optional<PerceptualQualityReport> lastQuality;
     std::optional<AudioFeatures> lastProcessedFeatures;
     MasteringOptions processingChainOptions;
+#if CASSETTE_ENABLE_PI_TAPE
+    PiTapeSettings piTapeSettings;
+#endif
     std::optional<LoadedAudio> sideAAudio;
     std::optional<LoadedAudio> sideBAudio;
     std::optional<LoadedAudio> mixtapeReferenceAudio;

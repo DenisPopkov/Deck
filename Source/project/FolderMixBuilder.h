@@ -22,7 +22,8 @@ struct TapeLengthSpec
     double minutesPerSide = 45.0;
 };
 
-TapeLengthSpec tapeLengthSpecForPreset(TapeLengthPreset preset, double customMinutesPerSide);
+/** @p customTotalMinutes is total cassette length (both sides); used only for Custom. */
+TapeLengthSpec tapeLengthSpecForPreset(TapeLengthPreset preset, double customTotalMinutes = 90.0);
 
 struct FolderTrackInfo
 {

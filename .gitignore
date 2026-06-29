@@ -1,4 +1,6 @@
 build/
+build-ci/
+build-pi/
 cmake-build-*/
 out/
 dist/
@@ -25,3 +27,4 @@ __pycache__/
 *.pyc
 models/*.onnx
 !models/.gitkeep
+cmake/LocalPiTape.cmake

@@ -33,6 +33,9 @@ public:
 
     static juce::File pickFirstAudioFile(const juce::StringArray& paths);
 
+    /** Returns duration in seconds, or 0 if the file is not a supported audio track. */
+    static double probeDurationSec(const juce::File& file);
+
     static juce::Optional<LoadedAudio> loadToBuffer(const juce::File& file);
     static LoadResult loadToBufferWithDiagnostics(const juce::File& file);
 };

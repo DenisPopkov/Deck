@@ -3,6 +3,49 @@
 namespace cassette
 {
 
+namespace
+{
+
+const juce::StringArray& supportedAudioExtensions()
+{
+    static const juce::StringArray extensions { "wav", "flac", "aiff", "aif", "ogg", "mp3" };
+    return extensions;
+}
+
+bool isHiddenFileName(const juce::String& fileName)
+{
+    return fileName.isNotEmpty() && fileName.startsWithChar('.');
+}
+
+bool isKnownNonAudioExtension(const juce::String& extension)
+{
+    if (extension.isEmpty())
+        return false;
+
+    const auto bare = extension.startsWithChar('.') ? extension.substring(1) : extension;
+    static const juce::StringArray blocked {
+        "heic", "heif", "jpg", "jpeg", "png", "gif", "webp", "tif", "tiff", "bmp",
+        "zip", "rar", "7z", "gz", "tar", "dmg", "pkg", "app", "exe", "msi", "deb",
+        "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "md", "json",
+        "xml", "html", "css", "js", "ts", "mov", "mp4", "m4v", "avi", "mkv"
+    };
+    return blocked.contains(bare, true);
+}
+
+bool isSupportedAudioExtension(const juce::String& extension)
+{
+    if (extension.isEmpty())
+        return false;
+
+    const auto bare = extension.startsWithChar('.') ? extension.substring(1) : extension;
+    if (isKnownNonAudioExtension(bare))
+        return false;
+
+    return supportedAudioExtensions().contains(bare, true);
+}
+
+} // namespace
+
 juce::AudioFormatManager& AudioFileLoader::getFormatManager()
 {
     static juce::AudioFormatManager fm;
@@ -42,21 +85,14 @@ bool AudioFileLoader::isSupportedAudioFile(const juce::File& file)
     if (!file.existsAsFile())
         return false;
 
-    auto& fm = getFormatManager();
+    if (isHiddenFileName(file.getFileName()))
+        return false;
+
     const auto ext = file.getFileExtension();
+    if (!isSupportedAudioExtension(ext))
+        return false;
 
-    if (ext.isNotEmpty() && fm.findFormatForFileExtension(ext) != nullptr)
-        return true;
-
-    if (auto in = file.createInputStream())
-    {
-        std::unique_ptr<juce::AudioFormatReader> probe(
-            fm.createReaderFor(std::unique_ptr<juce::InputStream>(in.release())));
-        if (probe != nullptr)
-            return true;
-    }
-
-    return false;
+    return getFormatManager().findFormatForFileExtension(ext) != nullptr;
 }
 
 bool AudioFileLoader::isSupportedAudioFileDrop(const juce::StringArray& paths)
@@ -77,6 +113,27 @@ juce::File AudioFileLoader::pickFirstAudioFile(const juce::StringArray& paths)
             return f;
     }
     return {};
+}
+
+double AudioFileLoader::probeDurationSec(const juce::File& file)
+{
+    if (!isSupportedAudioFile(file))
+        return 0.0;
+
+    auto in = file.createInputStream();
+    if (in == nullptr)
+        return 0.0;
+
+    auto& fm = getFormatManager();
+    std::unique_ptr<juce::AudioFormatReader> reader(
+        fm.createReaderFor(std::unique_ptr<juce::InputStream>(in.release())));
+    if (reader == nullptr)
+        return 0.0;
+
+    if (reader->sampleRate <= 0.0 || reader->numChannels <= 0 || reader->lengthInSamples <= 0)
+        return 0.0;
+
+    return static_cast<double>(reader->lengthInSamples) / reader->sampleRate;
 }
 
 juce::Optional<LoadedAudio> AudioFileLoader::loadToBuffer(const juce::File& file)

@@ -18,6 +18,11 @@
 #include "../Source/dsp/ml/TapeAwareSoftClipper.h"
 #include "../Source/io/AudioFileLoader.h"
 #include "../Source/io/DropPayload.h"
+#include "../Source/export/WavExporter.h"
+#if CASSETTE_ENABLE_PI_TAPE
+#include "../Source/io/PiTapeSettings.h"
+#endif
+#include "../Source/util/CassetteBuildFlags.h"
 #include "../Source/audio/PreviewEngine.h"
 #include "../Source/audio/PerceptualPlaybackProcessor.h"
 #include "../Source/io/AudioResampler.h"
@@ -1521,13 +1526,13 @@ static void testTapeLengthPresets(TestContext& ctx)
     const auto c60 = tapeLengthSpecForPreset(TapeLengthPreset::C60, 45.0);
     const auto c90 = tapeLengthSpecForPreset(TapeLengthPreset::C90, 45.0);
     const auto c120 = tapeLengthSpecForPreset(TapeLengthPreset::C120, 45.0);
-    const auto custom = tapeLengthSpecForPreset(TapeLengthPreset::Custom, 52.5);
+    const auto custom = tapeLengthSpecForPreset(TapeLengthPreset::Custom, 40.0);
 
     ctx.expectNear(static_cast<float>(c60.minutesPerSide), 30.0f, 0.01f, "C60 should be 30 min per side");
     ctx.expectNear(static_cast<float>(c90.minutesPerSide), 45.0f, 0.01f, "C90 should be 45 min per side");
     ctx.expectNear(static_cast<float>(c120.minutesPerSide), 60.0f, 0.01f, "C120 should be 60 min per side");
-    ctx.expectNear(static_cast<float>(custom.minutesPerSide), 52.5f, 0.01f, "custom preset should preserve minutes");
-    ctx.expectTrue(custom.label.contains("52"), "custom preset label should mention minutes");
+    ctx.expectNear(static_cast<float>(custom.minutesPerSide), 20.0f, 0.01f, "custom total minutes should halve per side");
+    ctx.expectTrue(custom.label.contains("40"), "custom preset label should mention total minutes");
 }
 
 static void testFolderMixFormatDuration(TestContext& ctx)
@@ -1786,6 +1791,30 @@ static void testPerceptualQualityIdenticalBuffersPass(TestContext& ctx)
                    "identical buffers should score near transparent");
 }
 
+#if CASSETTE_ENABLE_PI_TAPE
+static void testPiTapeSettingsRoundTrip(TestContext& ctx)
+{
+    PiTapeSettings original;
+    original.enabled = true;
+    original.host = "raspberrypi.local";
+    original.port = 21;
+    original.controlPort = 8765;
+    original.username = "deck";
+    original.password = "secret";
+    original.remoteDir = "inbox";
+
+    const auto restored = PiTapeSettings::fromVar(original.toVar());
+    ctx.expectTrue(restored.enabled, "pi tape settings should preserve enabled");
+    ctx.expectTrue(restored.host == original.host, "pi tape settings should preserve host");
+    ctx.expectTrue(restored.port == 21, "pi tape settings should preserve port");
+    ctx.expectTrue(restored.controlPort == 8765, "pi tape settings should preserve control port");
+    ctx.expectTrue(restored.username == original.username, "pi tape settings should preserve username");
+    ctx.expectTrue(restored.password == original.password, "pi tape settings should preserve password");
+    ctx.expectTrue(restored.remoteDir == original.remoteDir, "pi tape settings should preserve remote dir");
+    ctx.expectTrue(restored.isConfigured(), "saved pi tape settings should be configured");
+}
+#endif
+
 static void testWavExporterRoundTrip(TestContext& ctx)
 {
     constexpr double sr = 48000.0;
@@ -1837,10 +1866,61 @@ static void testPreflightExportIncreasesPayload(TestContext& ctx)
 
 static void testAudioFileLoaderRejectsJunkExtension(TestContext& ctx)
 {
-    const auto junk = juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("deck_not_audio.txt");
+    const auto temp = juce::File::getSpecialLocation(juce::File::tempDirectory);
+
+    const auto junk = temp.getChildFile("deck_not_audio.txt");
     junk.replaceWithText("not audio");
     ctx.expectTrue(!AudioFileLoader::isSupportedAudioFile(junk), "non-audio extension should be rejected");
     junk.deleteFile();
+
+    const auto heic = temp.getChildFile("Screenshot.heic");
+    heic.replaceWithText("not audio");
+    ctx.expectTrue(!AudioFileLoader::isSupportedAudioFile(heic), "HEIC images should be rejected");
+    heic.deleteFile();
+
+    const auto zip = temp.getChildFile("Deck-macOS.zip");
+    zip.replaceWithText("not audio");
+    ctx.expectTrue(!AudioFileLoader::isSupportedAudioFile(zip), "zip archives should be rejected");
+    zip.deleteFile();
+
+    const auto hidden = temp.getChildFile(".hidden_track.flac");
+    hidden.replaceWithText("not audio");
+    ctx.expectTrue(!AudioFileLoader::isSupportedAudioFile(hidden), "hidden dotfile should be rejected");
+    hidden.deleteFile();
+
+    const auto sidecar = temp.getChildFile("._sidecar.wav");
+    sidecar.replaceWithText("not audio");
+    ctx.expectTrue(!AudioFileLoader::isSupportedAudioFile(sidecar), "AppleDouble sidecar should be rejected");
+    sidecar.deleteFile();
+}
+
+static void testFolderScanIgnoresNonMusicFiles(TestContext& ctx)
+{
+    const auto temp = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                          .getChildFile("deck-folder-scan-" + juce::String(juce::Random::getSystemRandom().nextInt()));
+    temp.deleteRecursively();
+    temp.createDirectory();
+
+    constexpr double sr = 44100.0;
+    const auto wavFile = temp.getChildFile("01 Alpha.wav");
+    const auto buffer = makeSineBuffer(sr, 1.0, 440.0f, 0.2f);
+    ctx.expectTrue(WavExporter::writeWav32Float(wavFile, buffer, sr), "folder scan fixture wav should write");
+
+    temp.getChildFile("Screenshot 2026-06-29 at 12.37.23.heic").replaceWithText("fake image");
+    temp.getChildFile("Deck-macOS.zip").replaceWithText("fake zip");
+    temp.getChildFile("notes.txt").replaceWithText("not music");
+
+    const auto scan = FolderMixBuilder::scanFolder(temp);
+    ctx.expectTrue(scan.success, "folder with one audio file should scan");
+    ctx.expectTrue(scan.tracks.size() == 1, "folder scan should ignore non-music files");
+    if (!scan.tracks.empty())
+    {
+        ctx.expectTrue(scan.tracks.front().file == wavFile, "folder scan should keep only the audio track");
+        ctx.expectTrue(AudioFileLoader::isSupportedAudioFile(scan.tracks.front().file),
+                       "scanned track should remain a supported audio file");
+    }
+
+    temp.deleteRecursively();
 }
 
 static void testCassetteAutoMasterGainHelper(TestContext& ctx)
@@ -1849,6 +1929,36 @@ static void testCassetteAutoMasterGainHelper(TestContext& ctx)
                    "gain helper should move toward target LUFS");
     ctx.expectNear(CassetteAutoMaster::calculateGainForTargetLUFS(-12.0f, -12.0f), 0.0f, 0.01f,
                    "gain helper should be zero at target");
+    ctx.expectNear(CassetteAutoMaster::calculateGainForTargetLUFS(265.7f, -11.5f), -16.5f, 0.05f,
+                   "corrupt hot LUFS should clamp reading then apply bounded gain");
+    ctx.expectNear(CassetteAutoMaster::calculateGainForTargetLUFS(-100.0f, -11.5f), 24.0f, 0.05f,
+                   "corrupt quiet LUFS should clamp gain boost to +24 dB");
+    ctx.expectNear(EssentiaAnalyzer::sanitizeIntegratedLufs(265.7f), 5.0f, 0.01f,
+                   "corrupt LUFS readings should clamp to +5 LUFS");
+}
+
+static void testCorruptLufsProcessingStaysAudible(TestContext& ctx)
+{
+    constexpr double sr = 44100.0;
+    auto buffer = makeSineBuffer(sr, 4.0, 440.0f, 0.35f);
+    const auto dryPeak = peakAbs(buffer);
+
+    AudioFeatures corrupt = EssentiaAnalyzer::extractFeaturesForMastering(buffer, sr);
+    corrupt.integratedLUFS = 265.7f;
+    corrupt.truePeakDbfs = 0.0f;
+
+    CassetteAutoMaster master;
+    master.prepare(sr, buffer.getNumSamples());
+
+    MasteringOptions opts;
+    opts.maximumDigital = true;
+    master.processTrack(buffer,
+                        CassetteProfile::forRecording(RecordingDeck::KenwoodKX1100G, TapeFormulation::TypeII),
+                        corrupt,
+                        opts);
+
+    ctx.expectTrue(bufferIsFinite(buffer), "corrupt LUFS path must stay finite");
+    ctx.expectTrue(peakAbs(buffer) > dryPeak * 0.01f, "corrupt LUFS must not silence material");
 }
 
 static void testMixtapeEditorActiveCassetteSwitch(TestContext& ctx)
@@ -1977,9 +2087,14 @@ int main()
     testRubberBandWowProcessorStable(ctx);
     testPerceptualQualityIdenticalBuffersPass(ctx);
     testWavExporterRoundTrip(ctx);
+#if CASSETTE_ENABLE_PI_TAPE
+    testPiTapeSettingsRoundTrip(ctx);
+#endif
     testPreflightExportIncreasesPayload(ctx);
     testAudioFileLoaderRejectsJunkExtension(ctx);
+    testFolderScanIgnoresNonMusicFiles(ctx);
     testCassetteAutoMasterGainHelper(ctx);
+    testCorruptLufsProcessingStaysAudible(ctx);
     testMixtapeEditorActiveCassetteSwitch(ctx);
     testFolderFitReportSummary(ctx);
 

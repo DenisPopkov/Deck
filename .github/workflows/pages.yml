@@ -46,7 +46,7 @@ jobs:
 
       - name: Configure and build (MSVC)
         run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -DCASSETTE_BUILD_TESTS=OFF
+          cmake -C cmake/ProdOptions.cmake -B build -DCMAKE_BUILD_TYPE=Release -DCASSETTE_BUILD_TESTS=OFF
           cmake --build build --config Release -j 3
 
       - name: Package Windows zip for Pages
@@ -82,7 +82,7 @@ jobs:
 
       - name: Configure and build
         run: |
-          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCASSETTE_BUILD_TESTS=OFF
+          cmake -C cmake/ProdOptions.cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCASSETTE_BUILD_TESTS=OFF
           cmake --build build --target Deck --parallel
 
       - name: Package Linux tarball for Pages

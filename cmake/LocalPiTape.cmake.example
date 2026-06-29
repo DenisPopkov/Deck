@@ -1,0 +1,7 @@
+# Copy to cmake/LocalPiTape.cmake (gitignored) for optional Pi dev defaults.
+# This file is loaded ONLY when CASSETTE_ENABLE_PI_TAPE=ON (see CMakeLists.txt).
+# It must NOT enable Pi tape by itself — use:
+#   cmake -C cmake/PiTapeDevOptions.cmake -B build-pi ...
+#   make configure-pi
+
+set(PI_TAPE_DEFAULT_HOST "192.168.1.119" CACHE STRING "Default Pi FTP host for local dev tools")

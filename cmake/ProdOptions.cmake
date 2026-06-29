@@ -1,0 +1,3 @@
+# Production / release configure defaults.
+# Usage: cmake -C cmake/ProdOptions.cmake -B build ...
+set(CASSETTE_ENABLE_PI_TAPE OFF CACHE BOOL "Private dev-only Pi FTP upload" FORCE)

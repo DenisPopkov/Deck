@@ -147,7 +147,8 @@ Invoke-CMake @(
     "-G", $Generator,
     "-A", "x64",
     "-DCMAKE_BUILD_TYPE=$Config",
-    "-DCASSETTE_BUILD_TESTS=$testsFlag"
+    "-DCASSETTE_BUILD_TESTS=$testsFlag",
+    "-DCASSETTE_ENABLE_PI_TAPE=OFF"
 )
 
 $buildArgs = @("--build", $buildPath, "--config", $Config, "--target", "Deck")

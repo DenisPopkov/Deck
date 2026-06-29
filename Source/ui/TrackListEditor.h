@@ -23,6 +23,7 @@ public:
 
     void setController(MixtapeEditController* controller);
     void setTapeSpec(const TapeLengthSpec& tape);
+    void rebalanceSides();
     void refresh();
     void setLoading(bool loading);
     void refreshLocalisedText();
@@ -58,6 +59,7 @@ private:
         juce::String currentTrackName() const { return trackName; }
         bool isAttached() const { return deviceManager != nullptr; }
 
+        void prepareForOutput();
         void prepareToPlay(int samplesPerBlockExpected, double sampleRate) override;
         void releaseResources() override;
         void getNextAudioBlock(const juce::AudioSourceChannelInfo& bufferToFill) override;
@@ -118,7 +120,7 @@ private:
         void clearHover();
         int getSelectedRow() const { return selectedRow; }
         int rowAtY(int y) const;
-        int getContentHeight() const;
+        int getContentHeight(int minimumHeight = 0) const;
         int getCheckedCount() const;
         std::vector<int> getCheckedRows() const;
         void clearChecked();
@@ -210,6 +212,7 @@ private:
     juce::Viewport sideAViewport;
     juce::Viewport sideBViewport;
     juce::TextButton selectTracksButton { "Select tracks" };
+    juce::TextButton rebalanceSidesButton { "Rebalance sides" };
     juce::TextButton deleteSelectedButton { "Remove selected" };
     TrashZone trashZone;
     MiniPlayerBar miniPlayer;
