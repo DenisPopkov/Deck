@@ -64,5 +64,9 @@ function(cassette_configure_core_target target)
         juce::juce_dsp
         juce::juce_audio_formats
     )
-    target_compile_features(${target} PUBLIC cxx_std_20)
+    if(CASSETTE_LEGACY_MACOS)
+        target_compile_features(${target} PUBLIC cxx_std_17)
+    else()
+        target_compile_features(${target} PUBLIC cxx_std_20)
+    endif()
 endfunction()

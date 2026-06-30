@@ -2,7 +2,13 @@ cmake_minimum_required(VERSION 3.22)
 
 project(Deck VERSION 0.2.11 LANGUAGES C CXX)
 
-set(CMAKE_CXX_STANDARD 20)
+option(CASSETTE_LEGACY_MACOS "Build for Intel macOS 10.14+ (Mojave)" OFF)
+
+if(CASSETTE_LEGACY_MACOS)
+    set(CMAKE_CXX_STANDARD 17)
+else()
+    set(CMAKE_CXX_STANDARD 20)
+endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(CASSETTE_BUILD_ESSENTIA "Link Essentia for offline analysis" OFF)
@@ -48,6 +54,7 @@ FetchContent_MakeAvailable(JUCE)
 
 include(cmake/CassetteCore.cmake)
 include(cmake/OptionalDeps.cmake)
+include(cmake/MacPlatform.cmake)
 
 add_library(cassette_core STATIC ${CASSETTE_CORE_SOURCES})
 cassette_configure_core_target(cassette_core)
@@ -150,6 +157,8 @@ target_link_libraries(Deck PRIVATE
     juce::juce_audio_devices
     juce::juce_gui_extra
 )
+deck_apply_macos_target_properties(Deck)
+deck_apply_macos_target_properties(cassette_core)
 
 if(CASSETTE_BUILD_ESSENTIA)
     cassette_find_essentia(CASSETTE_ESSENTIA_FOUND)

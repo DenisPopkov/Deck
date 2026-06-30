@@ -28,6 +28,15 @@
 
 При первом запуске на MacOS система может заблокировать неподписанное приложение: щелкните правой кнопкой по **Deck.app** -> **Открыть**.
 
+### Системные требования (MacOS)
+
+| Сборка | macOS | Процессор |
+|--------|-------|-----------|
+| **Deck** (основная) | 11 Big Sur и новее | Apple Silicon (M1+) |
+| **Deck для Mojave** | 10.14.6 Mojave и новее | Intel (x86_64) |
+
+На старых Intel Mac с Mojave скачайте **Deck-macOS-Mojave.zip** с [сайта](https://denispopkov.github.io/Deck/downloads/Deck-macOS-Mojave-latest.zip) или из [релизов GitHub](https://github.com/DenisPopkov/Deck/releases/latest).
+
 ### Требования для сборки
 
 - **MacOS:** Xcode Command Line Tools, CMake 3.22+
@@ -66,6 +75,14 @@ open build/Deck_artefacts/Release/Deck.app
 ```
 
 Результат: `dist/macOS/Deck.app` и `dist/Deck-0.2.0-macOS.zip`.
+
+#### Релиз для Mojave (Intel, macOS 10.14+)
+
+```bash
+./scripts/package_legacy_mac.sh
+```
+
+Результат: `dist/macOS-Legacy/Deck.app` и `dist/Deck-<версия>-macOS-Mojave.zip`.
 
 ### Сборка (Windows)
 
@@ -215,6 +232,15 @@ The latest Windows nightly build is also available:
 
 On first launch on MacOS, the system may block an unsigned app: right-click **Deck.app** -> **Open**.
 
+### MacOS system requirements
+
+| Build | macOS | CPU |
+|-------|-------|-----|
+| **Deck** (default) | 11 Big Sur or newer | Apple Silicon (M1+) |
+| **Deck for Mojave** | 10.14.6 Mojave or newer | Intel (x86_64) |
+
+On older Intel Macs running Mojave, download **Deck-macOS-Mojave.zip** from the [website](https://denispopkov.github.io/Deck/downloads/Deck-macOS-Mojave-latest.zip) or [GitHub releases](https://github.com/DenisPopkov/Deck/releases/latest).
+
 ### Build requirements
 
 - **MacOS:** Xcode Command Line Tools, CMake 3.22+
@@ -253,6 +279,14 @@ open build/Deck_artefacts/Release/Deck.app
 ```
 
 Output: `dist/macOS/Deck.app` and `dist/Deck-0.2.0-macOS.zip`.
+
+#### Mojave release package (Intel, macOS 10.14+)
+
+```bash
+./scripts/package_legacy_mac.sh
+```
+
+Output: `dist/macOS-Legacy/Deck.app` and `dist/Deck-<version>-macOS-Mojave.zip`.
 
 ### Build (Windows)
 

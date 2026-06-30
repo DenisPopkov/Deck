@@ -20,6 +20,9 @@ jobs:
           cmake -C cmake/ProdOptions.cmake -B build -DCMAKE_BUILD_TYPE=Release -DCASSETTE_BUILD_TESTS=OFF -DCASSETTE_SKIP_APP_ICON=ON -DCASSETTE_ENABLE_PI_TAPE=OFF
           cmake --build build --config Release --target Deck -j3
 
+      - name: Verify modern macOS binary
+        run: ./scripts/verify_mac_app.sh build/Deck_artefacts/Release/Deck.app --modern
+
       - name: Package zip
         run: |
           APP="build/Deck_artefacts/Release/Deck.app"
@@ -29,6 +32,30 @@ jobs:
         with:
           name: Deck-macOS
           path: Deck-macOS.zip
+          retention-days: 14
+
+  macos-legacy:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure and build (Mojave x86_64)
+        run: |
+          cmake -C cmake/LegacyMacOptions.cmake -B build-legacy -DCMAKE_BUILD_TYPE=Release -DCASSETTE_BUILD_TESTS=OFF -DCASSETTE_SKIP_APP_ICON=ON
+          cmake --build build-legacy --config Release --target Deck -j3
+
+      - name: Verify legacy macOS binary
+        run: ./scripts/verify_mac_app.sh build-legacy/Deck_artefacts/Release/Deck.app --legacy
+
+      - name: Package zip
+        run: |
+          APP="build-legacy/Deck_artefacts/Release/Deck.app"
+          ditto -c -k --sequesterRsrc --keepParent "$APP" Deck-macOS-Mojave.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Deck-macOS-Mojave
+          path: Deck-macOS-Mojave.zip
           retention-days: 14
 
   windows:
@@ -88,7 +115,7 @@ jobs:
           retention-days: 14
 
   release:
-    needs: [macos, windows, linux]
+    needs: [macos, macos-legacy, windows, linux]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
@@ -104,7 +131,8 @@ jobs:
           find artifacts -name 'Deck-Windows.zip' -exec cp {} . \;
           find artifacts -name 'Deck-Linux.tar.gz' -exec cp {} . \;
           find artifacts -name 'Deck-macOS.zip' -exec cp {} . \;
-          ls -la Deck-macOS.zip Deck-Windows.zip Deck-Linux.tar.gz
+          find artifacts -name 'Deck-macOS-Mojave.zip' -exec cp {} . \;
+          ls -la Deck-macOS.zip Deck-macOS-Mojave.zip Deck-Windows.zip Deck-Linux.tar.gz
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -112,5 +140,6 @@ jobs:
           generate_release_notes: true
           files: |
             Deck-macOS.zip
+            Deck-macOS-Mojave.zip
             Deck-Windows.zip
             Deck-Linux.tar.gz

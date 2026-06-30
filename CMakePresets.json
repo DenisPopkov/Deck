@@ -37,6 +37,21 @@
         "CASSETTE_BUILD_TESTS": "ON",
         "CASSETTE_ENABLE_PI_TAPE": "ON"
       }
+    },
+    {
+      "name": "legacy-mac",
+      "displayName": "macOS Mojave (Intel x86_64)",
+      "description": "Legacy build for macOS 10.14.6+ on Intel Macs",
+      "binaryDir": "${sourceDir}/build-legacy",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CASSETTE_BUILD_TESTS": "OFF",
+        "CASSETTE_ENABLE_PI_TAPE": "OFF",
+        "CASSETTE_LEGACY_MACOS": "ON",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "10.14",
+        "CMAKE_OSX_ARCHITECTURES": "x86_64",
+        "CASSETTE_BUILD_GSTPEAQ": "OFF"
+      }
     }
   ],
   "buildPresets": [
@@ -53,6 +68,11 @@
     {
       "name": "pi-dev-deck",
       "configurePreset": "pi-dev",
+      "targets": ["Deck"]
+    },
+    {
+      "name": "legacy-mac-deck",
+      "configurePreset": "legacy-mac",
       "targets": ["Deck"]
     }
   ]
