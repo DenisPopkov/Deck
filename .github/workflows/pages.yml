@@ -37,7 +37,7 @@ jobs:
               - 'scripts/verify_mac_app.sh'
               - 'scripts/find_deck_binary.sh'
               - '.github/workflows/pages.yml'
-              - '.github/workflows/linux-build.yml'
+              - 'docs/**'
 
   build_windows:
     needs: changes
@@ -100,13 +100,13 @@ jobs:
           retention-days: 14
 
   build_macos_legacy:
-    needs: changes
-    if: needs.changes.outputs.app == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
 
       - name: Build Mojave package
+        env:
+          CASSETTE_SKIP_APP_ICON: ON
         run: ./scripts/package_legacy_mac.sh
 
       - name: Stage Pages zip
@@ -214,6 +214,7 @@ jobs:
           rm -rf page-build/site
           mkdir -p page-build/site/downloads
           cp -R docs/. page-build/site/
+          test -f page-build/site/downloads/Deck-macOS-Mojave-latest.zip || echo "WARN: no committed Mojave zip in docs/downloads"
           if [ -f fresh-windows-downloads/Deck-Windows-latest.zip ]; then
             cp fresh-windows-downloads/Deck-Windows-latest.zip page-build/site/downloads/Deck-Windows-latest.zip
           elif [ -f cached-downloads/Deck-Windows-latest.zip ]; then

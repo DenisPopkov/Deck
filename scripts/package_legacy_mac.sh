@@ -39,7 +39,9 @@ mkdir -p "$DIST/macOS-Legacy"
 rm -rf "$DIST/macOS-Legacy/Deck.app"
 cp -R "$APP_PATH" "$DIST/macOS-Legacy/"
 
-bash "$ROOT/scripts/apply_app_icon.sh" "$DIST/macOS-Legacy/Deck.app"
+if [[ "${CASSETTE_SKIP_APP_ICON:-OFF}" != "ON" ]]; then
+  bash "$ROOT/scripts/apply_app_icon.sh" "$DIST/macOS-Legacy/Deck.app"
+fi
 bash "$ROOT/scripts/resign_mac_app.sh" "$DIST/macOS-Legacy/Deck.app"
 
 ZIP="$DIST/Deck-${VERSION}-macOS-Mojave.zip"
