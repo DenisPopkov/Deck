@@ -467,14 +467,6 @@ section {
   margin-bottom: 16px;
 }
 
-.download-note {
-  font-size: 0.9rem;
-  color: var(--muted);
-  max-width: 560px;
-  margin: 0 auto;
-  line-height: 1.5;
-}
-
 /* FAQ */
 
 .faq-list {
